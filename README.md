@@ -14,11 +14,11 @@
 
 Meet the minds behind VirtuaLab:
 
-*   **Prajwal Hage** (Lead Architect & Developer) — [GitHub Profile](https://github.com/Prjhage)
-*   **Om Shrigiriwar** (Core Engineer) — [GitHub Profile](https://github.com/om67891)
-*   **Prasad Pawar** (Systems Engineer) — [GitHub Profile](https://github.com/Prasadpawar21)
-*   **Sakshi Salvi** (UI/UX Designer) — [GitHub Profile](https://github.com/sakshisal)
-*   **Aniket Shinde** (Full Stack Engineer)
+*   **Prajwal Hage** (Full Stack Developer) — [GitHub Profile](https://github.com/Prjhage)
+*   **Om Shrigiriwar** (AI/ML Engineer & Database Management) — [GitHub Profile](https://github.com/om67891)
+*   **Prasad Pawar** (Project Architecture & Backend Developer) — [GitHub Profile](https://github.com/Prasadpawar21)
+*   **Sakshi Salvi** (UI/UX Designer & Researcher) — [GitHub Profile](https://github.com/sakshisal)
+*   **Aniket Shinde** (AI Workflow Management & Presentation Lead)
 
 ---
 
