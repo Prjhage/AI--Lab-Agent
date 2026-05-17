@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="VirtuaLab — AI-Powered Virtual Laboratory Platform with RAG-guided experiments, code execution, and intelligent mentorship for students and teachers." />
+    <meta name="theme-color" content="#07070f" />
+    <title>VirtuaLab — AI Virtual Laboratory Platform</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* Prevent FOUC on dark background */
+      html, body { background-color: #07070f; }
+
+      /* Custom keyframe animations */
+      @keyframes slide-in {
+        from { transform: translateX(-100%); opacity: 0; }
+        to   { transform: translateX(0);     opacity: 1; }
+      }
+      @keyframes scale-in {
+        from { transform: scale(0.92); opacity: 0; }
+        to   { transform: scale(1);    opacity: 1; }
+      }
+      @keyframes fade-up {
+        from { transform: translateY(16px); opacity: 0; }
+        to   { transform: translateY(0);    opacity: 1; }
+      }
+
+      .animate-slide-in  { animation: slide-in  0.28s cubic-bezier(0.4,0,0.2,1) both; }
+      .animate-scale-in  { animation: scale-in  0.22s cubic-bezier(0.4,0,0.2,1) both; }
+      .animate-fade-up   { animation: fade-up   0.30s cubic-bezier(0.4,0,0.2,1) both; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
