@@ -35,7 +35,7 @@ Practical computer science learning currently suffers from three fundamental bot
 
 **VirtuaLab** introduces a unified, interactive laboratory operating system that bridges the gap between sandboxed execution and intelligent tutor guidance:
 
-*   **⚡ Secure Integrated Sandboxes**: Run Python, JavaScript, C++, and Java solutions directly inside the browser using a high-performance sandbox compiler powered by **Judge0**. No local machine setup required.
+*   **⚡ Secure Integrated Sandboxes**: Run Python, JavaScript, C++, and Java solutions directly inside the browser using a high-performance, secure backend local sandbox engine. No local student machine compiler setup required.
 *   **🤖 Groq-Powered AI Copilot Agent**: An intelligent virtual lab assistant always active on the right panel. It acts as an elite pair-programmer, evaluating student code, answering algorithmic questions, and suggesting optimized design alternatives.
 *   **📚 Retrieval-Augmented Generation (RAG)**: The AI Copilot is fully contextualized. It automatically indexes, splits, and retrieves high-fidelity background facts from PDF manuals or textbooks uploaded for each laboratory module.
 *   **🪜 Interactive Step Progression**: For non-code experiments (like Docker deployments, CLI setups, or security tasks), labs are structured as a ladder of steps. Students execute commands, click **Debug Step** to stage context, and submit their output. The AI evaluates their execution and cryptographically unlocks the next step button!
@@ -49,7 +49,7 @@ VirtuaLab is built upon an elite, high-performance, dark-themed glassmorphic sta
 ### Frontend
 *   **React (Vite)**: Ultra-fast state updates and modern SPA routing.
 *   **Framer Motion**: Premium visual feedback, smooth panel resizing transitions, and organic component mounting animations.
-*   **Monaco Editor**: The same high-power engine behind VS Code, providing native syntax highlighting, autocompletion, and multi-language support directly in the browser.
+*   **Monaco Editor (`@monaco-editor/react`)**: Implemented directly using the native React Monaco Editor library, providing syntax highlighting, autocompletion, and multi-language support in the browser.
 *   **Lucide Icons**: Premium vector interface elements.
 
 ### Backend
@@ -68,12 +68,12 @@ sequenceDiagram
     actor Student as Student (Browser)
     participant FE as React Frontend
     participant BE as FastAPI Backend
-    participant Sandbox as Judge0 Secure Sandbox
+    participant Sandbox as Secure Local Sandbox
     participant LLM as Groq RAG Engine
 
     Student->>FE: Write & Run Code in Editor
     FE->>BE: POST /api/sandbox/run {code, language}
-    BE->>Sandbox: Execute Isolated Subprocess
+    BE->>Sandbox: Execute Local Subprocess (Python/Node/G++/Java)
     Sandbox-->>BE: Return Stdout / Stderr / Test Outcomes
     BE-->>FE: Return Sandbox Result Payload
     FE->>Student: Render Results in Console Tab
@@ -88,7 +88,7 @@ sequenceDiagram
 ```
 
 ### 1. The Code Execution Sandbox
-When a student types a solution inside Monaco Editor and clicks **Run Code**, the frontend routes the code and language metadata to the backend `/api/sandbox/run` endpoint. The backend initializes a secure API request to the Judge0 compiler, which launches an isolated sandbox runner, asserts inputs against test cases, and yields raw console prints or compilation diagnostics.
+When a student types a solution inside Monaco Editor and clicks **Run Code**, the frontend routes the code and language metadata to the backend `/api/sandbox/run` endpoint. The backend invokes a secure local compilation sandbox engine that runs the code within an isolated server-side subprocess (using native Python execution, Node.js compilers, g++, or OpenJDK), asserts inputs against test cases, and yields raw console prints or compilation diagnostics.
 
 ### 2. The Contextual AI Copilot
 If the student hits a roadblock and clicks **Ask AI Agent** or types inside the chat area:
@@ -108,7 +108,7 @@ AI-Lab-Agent/
 │   │   ├── routers/
 │   │   │   ├── auth.py         # Student/Teacher session & auth
 │   │   │   ├── labs.py         # Lab & Experiment schemas/management
-│   │   │   ├── sandbox.py      # Judge0 secure execution bridge
+│   │   │   ├── sandbox.py      # Secure local execution router
 │   │   │   └── ai.py           # Groq contextual RAG completions
 │   │   ├── utils/
 │   │   │   ├── rag_engine.py   # PDF text segmentation & chunking
