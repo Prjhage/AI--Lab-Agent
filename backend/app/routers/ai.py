@@ -47,7 +47,7 @@ def generate_offline_response(
             f"        result = True\n"
             f"        return result\n"
             f"    except Exception as e:\n"
-            f"        return f'Failure state: {e}'\n"
+            f"        return f'Failure state: {{e}}'\n"
             f"```\n\n"
             f"**Advantages of this approach:**\n"
             f"- **Space Complexity**: $O(1)$ auxiliary memory\n"
@@ -187,7 +187,7 @@ def chat_with_agent(
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama3-70b-8192",
+                    "model": "llama-3.3-70b-versatile",
                     "messages": messages,
                     "temperature": 0.3
                 },

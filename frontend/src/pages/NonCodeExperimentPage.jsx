@@ -315,7 +315,7 @@ export default function NonCodeExperimentPage() {
                               </div>
                               <p className="flex-1 text-xs font-bold"
                                 style={{ color: isDone ? '#4ade80' : isCurrent ? '#fff' : '#9ca3af' }}>
-                                {step.title}
+                                {step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`}
                               </p>
                               {!isLocked && (
                                 isOpen
@@ -342,7 +342,7 @@ export default function NonCodeExperimentPage() {
                                     {!isDone && (
                                       <div className="flex gap-2">
                                         <motion.button
-                                          onClick={() => chat.debugStep(step.title, step.description, i, step.id)}
+                                          onClick={() => chat.debugStep(step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`, step.description, i, step.id)}
                                           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold"
                                           style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.22)', color: '#fdba74' }}
                                           whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}

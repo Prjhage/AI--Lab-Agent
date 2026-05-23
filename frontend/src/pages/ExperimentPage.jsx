@@ -375,7 +375,7 @@ export default function ExperimentPage() {
                             style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.3)', color: '#c4b5fd' }}>
                             {i + 1}
                           </div>
-                          <p className="text-xs font-bold text-white">{step.title}</p>
+                          <p className="text-xs font-bold text-white">{step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`}</p>
                         </div>
                         <p className="px-4 pb-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-sub)' }}>
                           {step.description}
