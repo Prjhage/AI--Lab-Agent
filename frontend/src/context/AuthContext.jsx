@@ -77,7 +77,8 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: true, user };
     } catch (err) {
-      return { success: false, message: err.message || 'Invalid credentials!' };
+      const errorMessage = err.response?.data?.detail || err.message || 'Invalid credentials!';
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -94,7 +95,8 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true, user: loginRes.user };
     } catch (err) {
-      return { success: false, message: err.message || 'Signup failed!' };
+      const errorMessage = err.response?.data?.detail || err.message || 'Signup failed!';
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -134,7 +136,8 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: true, lab: res.lab };
     } catch (err) {
-      return { success: false, message: err.message || 'Failed to join lab!' };
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to join lab!';
+      return { success: false, message: errorMessage };
     }
   };
 

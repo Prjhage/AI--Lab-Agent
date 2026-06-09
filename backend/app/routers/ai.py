@@ -138,6 +138,17 @@ def chat_with_agent(
     # Resolve active query text from both message or query fields
     query_text = payload.message or payload.query or ""
 
+    # Fetch expected_command for the active step (if step_id provided)
+    expected_command = None
+    step_context = ""
+    if payload.step_id:
+        active_step = db.query(Step).filter(Step.id == payload.step_id).first()
+        if active_step:
+            expected_command = active_step.expected_command
+            step_context = f"\nActive Step: '{active_step.title}'\nStep Description: {active_step.description}"
+            if expected_command:
+                step_context += f"\nExpected Command (HIDDEN from student): {expected_command}"
+
     # RAG: Retrieve context from PDF if available
     rag_context = ""
     if exp.file_path and os.path.exists(exp.file_path):
@@ -159,16 +170,21 @@ def chat_with_agent(
                 f"to complete their experiment: '{exp.title}' successfully.\n"
                 f"Description: {exp.description}\n"
             )
+            if step_context:
+                system_prompt += f"\n--- ACTIVE STEP CONTEXT ---{step_context}\n"
             if rag_context:
                 system_prompt += f"Relevant background text retrieved from instruction PDF guidelines:\n{rag_context}\n"
             if payload.current_code:
                 system_prompt += f"Current student code snippet in editor:\n```python\n{payload.current_code}\n```\n"
-                
+
             system_prompt += (
                 "\nFormat your answers beautifully using clear headings and complete markdown syntax. Keep suggestions educational, precise, and highly readable.\n"
                 "CRITICAL INSTRUCTIONS:\n"
                 "1. If the student's current code is already 100% correct, functional, and satisfies the experiment description, you MUST clearly state that their code is correct, workable, and fully operational first before recommending any optional stylistic improvements or minor optimizations. Do not tell them they need to add more code if their solution is already complete.\n"
-                "2. If the student asks to verify their command/work in a non-code experiment, or has successfully completed the instructions/commands of the active step, you MUST append the exact token '[STEP_UNLOCKED]' at the very end of your response so the system unlocks the next step button."
+                "2. For NON-CODE experiments: When the student submits a command for verification (they will say something like 'verify' or 'check' or paste a command), compare their input to the Expected Command provided in your context. "
+                "If their command matches or is functionally equivalent, congratulate them and append the exact token '[STEP_UNLOCKED]' at the very end of your response. "
+                "If it does NOT match, give a specific contextual HINT (not the full answer) to guide them — do NOT reveal the expected command directly. "
+                "3. If no Expected Command is in context (step has no command), unlock the step when the student indicates they have completed the step instructions."
             )
 
             messages = [{"role": "system", "content": system_prompt}]

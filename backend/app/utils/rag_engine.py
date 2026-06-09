@@ -84,7 +84,14 @@ def generate_steps_via_groq(text: str) -> List[Dict[str, Any]]:
     
     system_prompt = (
         "You are the VirtuaLab PDF Step Extraction Parser. Your objective is to extract sequential experimental steps from raw guidelines PDF text. "
-        "Output strictly valid JSON arrays of objects containing keys 'title', 'description', and 'step_order'. Do not include markdown code block formatting or explanations. Output pure JSON."
+        "In the source PDF, commands are wrapped in tilde notation like ~command~. "
+        "Output strictly valid JSON arrays of objects with exactly these keys: 'title', 'description', 'expected_command', 'step_order'. "
+        "RULES: "
+        "'title': The step heading only (no commands). "
+        "'description': Plain English explanation of WHAT the student must do. NEVER include any commands, shell syntax, or tilde-wrapped content here. "
+        "'expected_command': ALL commands from ~...~ markers in this step joined with newlines. If none, use null. "
+        "'step_order': Sequential integer. "
+        "Do not include markdown code block formatting or explanations. Output pure JSON only."
     )
     
     payload = {
@@ -123,6 +130,33 @@ def generate_steps_via_groq(text: str) -> List[Dict[str, Any]]:
     return []
 
 
+def _extract_commands_from_text(text: str):
+    """
+    Extracts expected commands from a raw text block.
+    Looks for ~command~ markers (primary format) and inline `command` backtick blocks.
+    Returns (cleaned_description, expected_command_or_None)
+    """
+    commands = []
+
+    # 1. Extract ~command~ markers (primary format agreed with teachers)
+    tilde_cmds = re.findall(r'~([^~]+)~', text)
+    commands.extend(tilde_cmds)
+
+    # 2. Extract inline backtick code blocks as fallback (e.g., `sudo apt install git`)
+    backtick_cmds = re.findall(r'`([^`\n]+)`', text)
+    commands.extend(backtick_cmds)
+
+    # 3. Strip all ~...~ and `...` from the description so students don't see them
+    clean = re.sub(r'~[^~]+~', '', text)
+    clean = re.sub(r'`[^`\n]+`', '', clean)
+    clean = clean.strip().rstrip('.')
+    # Remove trailing punctuation artifacts
+    clean = re.sub(r'\s+', ' ', clean).strip()
+
+    expected = '\n'.join(commands) if commands else None
+    return clean, expected
+
+
 # --- STEP GENERATOR PARSER ---
 # Parses a PDF's content into structural sequential lab steps
 def generate_steps_from_text(text: str) -> List[Dict[str, Any]]:
@@ -133,13 +167,22 @@ def generate_steps_from_text(text: str) -> List[Dict[str, Any]]:
     # 1. Try Groq AI Step generation
     groq_steps = generate_steps_via_groq(text)
     if groq_steps:
-        # Validate keys exist in elements
         validated_steps = []
         for idx, step in enumerate(groq_steps):
             if isinstance(step, dict) and "title" in step and "description" in step:
+                raw_desc = str(step["description"])
+                groq_cmd = step.get("expected_command") or None
+
+                # Always post-process: strip any leaked commands from description
+                clean_desc, extracted_cmd = _extract_commands_from_text(raw_desc)
+
+                # Prefer Groq's explicit expected_command; fall back to what we extracted
+                final_cmd = groq_cmd or extracted_cmd
+
                 validated_steps.append({
                     "title": str(step["title"]),
-                    "description": str(step["description"]),
+                    "description": clean_desc or raw_desc,
+                    "expected_command": final_cmd,
                     "step_order": int(step.get("step_order", idx + 1))
                 })
         if validated_steps:
@@ -159,19 +202,22 @@ def generate_steps_from_text(text: str) -> List[Dict[str, Any]]:
     step_order = 1
     
     for line in lines:
-        line = line.strip()
-        if not line:
+        line_stripped = line.strip()
+        if not line_stripped:
             continue
             
         matched = False
         for pattern in step_patterns:
-            match = re.match(pattern, line, re.IGNORECASE)
+            match = re.match(pattern, line_stripped, re.IGNORECASE)
             if match:
                 # Save previous step if we had one
                 if current_title:
+                    desc_text = "\n".join(current_desc).strip()
+                    clean_desc, extracted_cmd = _extract_commands_from_text(desc_text)
                     steps.append({
                         "title": current_title,
-                        "description": "\n".join(current_desc).strip() or f"Perform actions specified in {current_title}",
+                        "description": clean_desc or f"Perform actions specified in {current_title}",
+                        "expected_command": extracted_cmd,
                         "step_order": step_order
                     })
                     step_order += 1
@@ -183,17 +229,20 @@ def generate_steps_from_text(text: str) -> List[Dict[str, Any]]:
                 
         if not matched:
             if current_title:
-                current_desc.append(line)
-            elif len(line) > 20 and not steps:
+                current_desc.append(line_stripped)
+            elif len(line_stripped) > 20 and not steps:
                 # Start a general step 1 if text starts without a heading
                 current_title = "Step 1: Initial Instructions"
-                current_desc.append(line)
+                current_desc.append(line_stripped)
 
     # Append the last step
     if current_title:
+        desc_text = "\n".join(current_desc).strip()
+        clean_desc, extracted_cmd = _extract_commands_from_text(desc_text)
         steps.append({
             "title": current_title,
-            "description": "\n".join(current_desc).strip() or f"Perform actions specified in {current_title}",
+            "description": clean_desc or f"Perform actions specified in {current_title}",
+            "expected_command": extracted_cmd,
             "step_order": step_order
         })
 

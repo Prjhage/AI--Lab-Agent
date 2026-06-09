@@ -1,72 +1,34 @@
+import axios from 'axios';
+
+// Base URL for the FastAPI backend
 const BASE_URL = 'http://localhost:8000';
 
-async function request(endpoint, options = {}) {
+// Create an Axios instance with default config
+const api = axios.create({
+  baseURL: BASE_URL,
+  timeout: 15000,
+});
+
+// Request interceptor to attach JWT token from localStorage
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...(options.headers || {})
-  };
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
 
-  const url = `${BASE_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers
+// Response interceptor to unwrap response data
+api.interceptors.response.use(
+  (response) => response.data,
+  (error) => Promise.reject(error)
+);
+
+// Helper for multipart/form-data uploads (e.g., PDF upload)
+api.upload = (url, formData) => {
+  return api.post(url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
-
-  if (!response.ok) {
-    let errorMessage = `HTTP error! Status: ${response.status}`;
-    try {
-      const errorData = await response.json();
-      if (errorData.detail) {
-        if (typeof errorData.detail === 'string') {
-          errorMessage = errorData.detail;
-        } else if (Array.isArray(errorData.detail)) {
-          errorMessage = errorData.detail.map(e => `${e.loc[e.loc.length - 1]}: ${e.msg}`).join(', ');
-        } else {
-          errorMessage = JSON.stringify(errorData.detail);
-        }
-      }
-    } catch (_) {}
-    throw new Error(errorMessage);
-  }
-
-  return response.json();
-}
-
-export const api = {
-  get: (endpoint, options) => request(endpoint, { ...options, method: 'GET' }),
-  post: (endpoint, body, options) => request(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
-  put: (endpoint, body, options) => request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(body) }),
-  delete: (endpoint, options) => request(endpoint, { ...options, method: 'DELETE' }),
-  
-  // Special upload method for multipart forms (handles PDF uploads)
-  upload: async (endpoint, formData) => {
-    const token = localStorage.getItem('token');
-    const url = `${BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      body: formData
-    });
-    
-    if (!response.ok) {
-      let errorMessage = `HTTP error! Status: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        if (errorData.detail) {
-          if (typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail;
-          } else if (Array.isArray(errorData.detail)) {
-            errorMessage = errorData.detail.map(e => `${e.loc[e.loc.length - 1]}: ${e.msg}`).join(', ');
-          } else {
-            errorMessage = JSON.stringify(errorData.detail);
-          }
-        }
-      } catch (_) {}
-      throw new Error(errorMessage);
-    }
-    return response.json();
-  }
 };
+
 export default api;

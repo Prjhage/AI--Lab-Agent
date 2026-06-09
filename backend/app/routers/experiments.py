@@ -99,6 +99,7 @@ async def add_experiment(
             experiment_id=new_exp.id,
             title=step["title"],
             description=step["description"],
+            expected_command=step.get("expected_command"),  # Hidden from students
             step_order=step["step_order"]
         )
         db.add(new_step)
@@ -171,7 +172,7 @@ def delete_experiment(
     """Deletes an experiment within a laboratory workspace (Teacher only)."""
     # Verify the laboratory exists and belongs to the teacher
     lab = db.query(Lab).filter(Lab.id == lab_id).first()
-    if not lab or lab.faculty_id != teacher.id:
+    if not lab or str(lab.faculty_id) != str(teacher.id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Laboratory workspace not found."

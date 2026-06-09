@@ -2,19 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Inline markdown-lite renderer
-function renderMD(text) {
-  return text
-    .replace(/### (.+)/g, '<p class="text-xs font-bold text-violet-300 mt-3 mb-1">$1</p>')
-    .replace(/## (.+)/g,  '<p class="text-sm font-bold text-white mt-3 mb-1">$1</p>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
-    .replace(/`([^`\n]+)`/g, '<code class="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded text-[11px] font-mono">$1</code>')
-    .replace(/```[\w]*\n?([\s\S]*?)```/g,
-      '<pre class="bg-black/50 border border-white/8 rounded-lg p-3 text-[11px] font-mono text-green-300 overflow-x-auto my-2 whitespace-pre-wrap leading-relaxed">$1</pre>')
-    .replace(/^(\d+)\. (.+)/gm, '<div class="flex gap-1.5 mb-0.5"><span class="text-violet-400 font-bold flex-shrink-0">$1.</span><span>$2</span></div>')
-    .replace(/^- (.+)/gm, '<div class="flex gap-1.5 mb-0.5"><span class="text-cyan-400">•</span><span>$1</span></div>')
-    .replace(/\n/g, '<br/>');
-}
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export const ChatPanel = ({ chat, onSuggestAlternate, onSuggestTestCases, currentCode }) => {
   const [input, setInput] = useState('');
@@ -92,7 +81,39 @@ export const ChatPanel = ({ chat, onSuggestAlternate, onSuggestTestCases, curren
                 border: `1px solid ${msg.sender === 'user' ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.07)'}`,
               }}>
                 {msg.sender === 'ai' || msg.text.startsWith('🪜')
-                  ? <div dangerouslySetInnerHTML={{ __html: renderMD(msg.text) }} />
+                  ? (
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h3: ({node, ...props}) => <p className="text-xs font-bold text-violet-300 mt-3 mb-1" {...props} />,
+                          h2: ({node, ...props}) => <p className="text-sm font-bold text-white mt-3 mb-1" {...props} />,
+                          strong: ({node, ...props}) => <strong className="text-white font-bold" {...props} />,
+                          pre: ({node, ...props}) => (
+                            <pre className="bg-black/50 border border-white/8 rounded-lg p-3 text-[11px] font-mono text-green-300 overflow-x-auto my-2 whitespace-pre-wrap leading-relaxed" {...props} />
+                          ),
+                          code: ({node, className, children, ...props}) => {
+                            const isBlock = /language-(\w+)/.exec(className || '');
+                            if (isBlock) return <code className={className} {...props}>{children}</code>;
+                            return <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded text-[11px] font-mono" {...props}>{children}</code>;
+                          },
+                          ol: ({node, ...props}) => <ol className="list-decimal ml-4 text-violet-400 font-bold mb-0.5" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc ml-4 text-cyan-400 mb-0.5" {...props} />,
+                          li: ({node, ...props}) => <li className="text-gray-200 font-normal mb-1" {...props} />,
+                          p: ({node, ...props}) => <p className="whitespace-pre-wrap mb-2 last:mb-0" {...props} />,
+                          table: ({node, ...props}) => (
+                            <div className="overflow-x-auto my-3 rounded-lg border border-white/10">
+                              <table className="w-full text-left text-xs text-gray-200" {...props} />
+                            </div>
+                          ),
+                          thead: ({node, ...props}) => <thead className="bg-white/5 text-cyan-300 border-b border-white/10" {...props} />,
+                          th: ({node, ...props}) => <th className="px-3 py-2 font-semibold border-r border-white/5 last:border-r-0" {...props} />,
+                          tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5" {...props} />,
+                          td: ({node, ...props}) => <td className="px-3 py-2 border-r border-white/5 last:border-r-0" {...props} />
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    )
                   : <p className="whitespace-pre-wrap">{msg.text}</p>
                 }
                 <p className="text-[9px] mt-1.5 opacity-40 text-right">{msg.timestamp}</p>

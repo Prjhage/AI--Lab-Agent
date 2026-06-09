@@ -113,6 +113,7 @@ class Step(Base):
     experiment_id = Column(GUID, ForeignKey("experiments.id"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
+    expected_command = Column(Text, nullable=True)  # Hidden from students; used by AI for verification
     step_order = Column(Integer, nullable=False)
 
     # Relationships

@@ -49,6 +49,7 @@ class TestCaseResponse(BaseModel):
 class StepCreate(BaseModel):
     title: str
     description: str
+    expected_command: Optional[str] = None  # Internal only — never returned to frontend
     step_order: int
 
 class StepResponse(BaseModel):
@@ -56,6 +57,7 @@ class StepResponse(BaseModel):
     title: str
     description: str
     step_order: int
+    # NOTE: expected_command is intentionally NOT here — hidden from students
 
     class Config:
         from_attributes = True
@@ -129,6 +131,7 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage] = []
     current_code: Optional[str] = None
     current_step: Optional[str] = None
+    step_id: Optional[str] = None  # Used to fetch expected_command server-side for verification
 
 class ChatResponse(BaseModel):
     text: str

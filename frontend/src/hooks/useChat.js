@@ -31,11 +31,11 @@ export const useChat = (experiment, activeStep = null, code = '') => {
   const sendMessage = async (text, customSender = 'user', currentCode = '', isHidden = false, stepContext = null) => {
     if (!text.trim()) return;
 
-    // Format user-side display text to show step first, then command/question below it
+    // Format user-side display text to show step first, then the user's question below it
     let displayText = text;
     if (stepContext) {
       const cleanStepName = stepContext.name.replace(/\s+added$/i, '');
-      displayText = `🪜 **${cleanStepName}**\n\`\`\`bash\n$ ${text}\n\`\`\``;
+      displayText = `🪜 **${cleanStepName}**\n\n${text}`;
     }
 
     const userMsg = {
@@ -72,7 +72,8 @@ export const useChat = (experiment, activeStep = null, code = '') => {
         message: textToSend,
         query: textToSend,
         current_code: currentCode || code || '',
-        history: historyList
+        history: historyList,
+        step_id: stepContext?.id || activeStep?.id || null
       });
 
       // Resolve response text
@@ -125,6 +126,65 @@ export const useChat = (experiment, activeStep = null, code = '') => {
     sendMessage(`Suggest additional test cases that I can assert against for the experiment "${experiment?.title}".`, 'user', '', true);
   };
 
+  const verifyCommand = (command, stepId, stepTitle) => {
+    const verifyPrompt = `Please verify my command for the step "${stepTitle}". Here is the command I typed:\n\`${command}\`\n\nIs this correct? If yes, confirm and unlock the next step. If not, give me a hint.`;
+    const userDisplayMsg = `🔍 **Verifying command for: ${stepTitle}**\n\`\`\`\n${command}\n\`\`\``;
+
+    // Add user message directly for display
+    setMessages(prev => [...prev, {
+      sender: 'user',
+      text: userDisplayMsg,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
+    setIsTyping(true);
+
+    // Build step context so step_id is passed in payload
+    const fakeStepCtx = { id: stepId, title: stepTitle };
+    
+    (async () => {
+      try {
+        const historyList = messages.map(m => ({
+          sender: m.sender === 'user' ? 'user' : 'ai',
+          text: m.text,
+          timestamp: m.timestamp || ''
+        }));
+
+        const res = await api.post(`/api/ai/chat/${experiment.id}`, {
+          message: verifyPrompt,
+          query: verifyPrompt,
+          current_code: '',
+          history: historyList,
+          step_id: stepId
+        });
+
+        let rawText = res.text || res.response || '';
+        let isUnlocked = false;
+        if (rawText.includes('[STEP_UNLOCKED]')) {
+          isUnlocked = true;
+          rawText = rawText.replace('[STEP_UNLOCKED]', '').trim();
+        }
+
+        setMessages(prev => [...prev, {
+          sender: 'ai',
+          text: rawText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+
+        if (isUnlocked) {
+          setUnlockedSteps(prev => ({ ...prev, [stepId]: true }));
+        }
+      } catch (err) {
+        setMessages(prev => [...prev, {
+          sender: 'ai',
+          text: `⚠️ **Verification Error:** ${err.message || 'Could not reach AI agent.'}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      } finally {
+        setIsTyping(false);
+      }
+    })();
+  };
+
   const truncateTitle = (title, maxWords = 5) => {
     const words = title.split(' ');
     if (words.length <= maxWords) return title;
@@ -154,6 +214,7 @@ export const useChat = (experiment, activeStep = null, code = '') => {
     askAgent,
     suggestAlternate,
     suggestTestCases,
+    verifyCommand,
     debugStep
   };
 };

@@ -7,7 +7,7 @@ import { ChatPanel } from '../components/chat/ChatPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, ChevronDown, ChevronUp, CheckCircle2,
-  ArrowRight, Zap, Star, FileText, Bug, Target, CheckCheck
+  ArrowRight, Zap, Star, FileText, Bug, Target, CheckCheck, Terminal, HelpCircle
 } from 'lucide-react';
 
 export default function NonCodeExperimentPage() {
@@ -23,6 +23,7 @@ export default function NonCodeExperimentPage() {
   const [expanded, setExpanded]         = useState({ 0: true });
   const [doneSteps, setDoneSteps]       = useState({});
   const [completed, setCompleted]       = useState(false);
+  const [commandInputs, setCommandInputs] = useState({}); // { stepIndex: string }
 
   const chat = useChat(experiment, experiment?.steps?.[currentStep]);
 
@@ -339,16 +340,63 @@ export default function NonCodeExperimentPage() {
                                       style={{ color: 'var(--text-sub)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                                       {step.description}
                                     </p>
+
+                                    {/* Command Input Area — shown only for current active step */}
+                                    {isCurrent && (
+                                      <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <Terminal size={11} className="text-cyan-400" />
+                                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Enter Your Command</span>
+                                        </div>
+                                        <div className="relative">
+                                          <textarea
+                                            value={commandInputs[i] || ''}
+                                            onChange={e => setCommandInputs(p => ({ ...p, [i]: e.target.value }))}
+                                            placeholder="Type your command here..."
+                                            rows={3}
+                                            className="w-full px-3 py-2.5 text-xs font-mono rounded-xl resize-none outline-none"
+                                            style={{
+                                              background: 'rgba(0,0,0,0.4)',
+                                              border: '1px solid rgba(6,182,212,0.2)',
+                                              color: '#67e8f9',
+                                              boxShadow: '0 0 0 0 transparent',
+                                              caretColor: '#67e8f9'
+                                            }}
+                                            onFocus={e => e.target.style.border = '1px solid rgba(6,182,212,0.5)'}
+                                            onBlur={e => e.target.style.border = '1px solid rgba(6,182,212,0.2)'}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
                                     {!isDone && (
-                                      <div className="flex gap-2">
+                                      <div className="flex gap-2 flex-wrap">
+                                        {/* Debug / Hint button */}
                                         <motion.button
                                           onClick={() => chat.debugStep(step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`, step.description, i, step.id)}
                                           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold"
                                           style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.22)', color: '#fdba74' }}
                                           whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                                         >
-                                          <Bug size={12} /> Debug Step
+                                          <HelpCircle size={12} /> Hint
                                         </motion.button>
+
+                                        {/* Verify Command button — only when command input is present */}
+                                        {isCurrent && commandInputs[i]?.trim() && (
+                                          <motion.button
+                                            onClick={() => {
+                                              const stepTitle = step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`;
+                                              chat.verifyCommand(commandInputs[i].trim(), step.id, stepTitle);
+                                            }}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold"
+                                            style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)', color: '#67e8f9' }}
+                                            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                                          >
+                                            <Terminal size={12} /> Verify Command
+                                          </motion.button>
+                                        )}
+
+                                        {/* Move to Next — unlocked by AI only */}
                                         {chat.unlockedSteps?.[step.id] && (
                                           <motion.button
                                             onClick={() => handleMoveNext(i)}
