@@ -28,25 +28,28 @@ export const useChat = (experiment, activeStep = null, code = '') => {
     setActiveContexts([]);
   };
 
-  const sendMessage = async (text, customSender = 'user', currentCode = '', isHidden = false, stepContext = null) => {
+  const sendMessage = async (text, customSender = 'user', currentCode = '', isHidden = false, stepContext = null, isSilent = false) => {
     if (!text.trim()) return;
 
     // Format user-side display text to show step first, then the user's question below it
     let displayText = text;
     if (stepContext) {
       const cleanStepName = stepContext.name.replace(/\s+added$/i, '');
-      displayText = `🪜 **${cleanStepName}**\n\n${text}`;
+      displayText = `**${cleanStepName}**\n\n${text}`;
     }
 
     const userMsg = {
       sender: customSender,
       text: displayText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isHidden
+      isHidden,
+      isStep: !!stepContext
     };
 
-    // Optimistically update standard UI list
-    setMessages(prev => [...prev, userMsg]);
+    if (!isSilent) {
+      // Optimistically update standard UI list
+      setMessages(prev => [...prev, userMsg]);
+    }
     setIsTyping(true);
 
     try {
@@ -86,11 +89,13 @@ export const useChat = (experiment, activeStep = null, code = '') => {
         rawText = rawText.replace('[STEP_UNLOCKED]', '').trim();
       }
 
-      setMessages(prev => [...prev, {
-        sender: 'ai',
-        text: rawText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
+      if (!isSilent) {
+        setMessages(prev => [...prev, {
+          sender: 'ai',
+          text: rawText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
       
       if (isUnlockedResponse) {
         const unlockId = stepContext?.id || activeStep?.id;
@@ -101,13 +106,18 @@ export const useChat = (experiment, activeStep = null, code = '') => {
       
       // Auto-clear context chips after successful transmission
       clearContexts();
+      
+      return rawText;
     } catch (err) {
       console.error("AI service communication failure:", err);
-      setMessages(prev => [...prev, {
-        sender: 'ai',
-        text: `⚠️ **AI Service Error:** Failed to get a response from the agent. ${err.message || 'Is your backend running?'}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
+      if (!isSilent) {
+        setMessages(prev => [...prev, {
+          sender: 'ai',
+          text: `**AI Service Error:** Failed to get a response from the agent. ${err.message || 'Is your backend running?'}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+      return null;
     } finally {
       setIsTyping(false);
     }
@@ -119,7 +129,13 @@ export const useChat = (experiment, activeStep = null, code = '') => {
   };
 
   const suggestAlternate = (currentCode) => {
-    sendMessage("Provide an alternate, high-performance solution for my implementation.", 'user', currentCode, true);
+    return sendMessage("Provide an alternate, high-performance solution for my implementation.", 'user', currentCode, true);
+  };
+  
+  const findMistake = async (currentCode) => {
+    const numberedCode = currentCode.split('\n').map((line, idx) => `${idx + 1} | ${line}`).join('\n');
+    const prompt = `Here is my code with line numbers:\n\n${numberedCode}\n\nFind the mistakes in my code. Output NOTHING ELSE except the exact line number of the mistake and the corrected line of code in this exact format: \`[LINE: X] [FIX: <corrected line>]\`. If there are multiple mistakes, return multiple lines of this format. If there is no mistake, return \`[LINE: 0] [FIX: none]\`. DO NOT EXPLAIN. DO NOT SAY ANYTHING ELSE. ONLY return the tags.`;
+    return await sendMessage(prompt, 'user', currentCode, false, null, true);
   };
 
   const suggestTestCases = () => {
@@ -128,7 +144,7 @@ export const useChat = (experiment, activeStep = null, code = '') => {
 
   const verifyCommand = (command, stepId, stepTitle) => {
     const verifyPrompt = `Please verify my command for the step "${stepTitle}". Here is the command I typed:\n\`${command}\`\n\nIs this correct? If yes, confirm and unlock the next step. If not, give me a hint.`;
-    const userDisplayMsg = `🔍 **Verifying command for: ${stepTitle}**\n\`\`\`\n${command}\n\`\`\``;
+    const userDisplayMsg = `**Verifying command for: ${stepTitle}**\n\`\`\`\n${command}\n\`\`\``;
 
     // Add user message directly for display
     setMessages(prev => [...prev, {
@@ -176,7 +192,7 @@ export const useChat = (experiment, activeStep = null, code = '') => {
       } catch (err) {
         setMessages(prev => [...prev, {
           sender: 'ai',
-          text: `⚠️ **Verification Error:** ${err.message || 'Could not reach AI agent.'}`,
+          text: `**Verification Error:** ${err.message || 'Could not reach AI agent.'}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
       } finally {
@@ -213,6 +229,7 @@ export const useChat = (experiment, activeStep = null, code = '') => {
     sendMessage,
     askAgent,
     suggestAlternate,
+    findMistake,
     suggestTestCases,
     verifyCommand,
     debugStep

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Lock, Eye, EyeOff, ArrowRight, Beaker, GraduationCap, FlaskConical } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, ArrowRight, Beaker, GraduationCap, FlaskConical, PartyPopper, CheckCircle2 } from 'lucide-react';
 
 const item = {
   initial: { opacity: 0, y: 20 },
@@ -106,7 +106,7 @@ export default function Signup() {
                 className="mb-4 p-3.5 rounded-xl text-sm font-semibold text-green-400 text-center"
                 style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
               >
-                🎉 Account created! Entering your lab…
+                <span className="flex items-center gap-2"><PartyPopper size={16} /> Account created! Entering your lab…</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -182,7 +182,7 @@ export default function Signup() {
               {loading ? (
                 <motion.div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
                   animate={{ rotate: 360 }} transition={{ duration: 0.75, repeat: Infinity, ease: 'linear' }} />
-              ) : success ? '✓ Done!' : <> Create Free Account <ArrowRight size={15} /> </>}
+              ) : success ? <><CheckCircle2 size={15}/> Done!</> : <> Create Free Account <ArrowRight size={15} /> </>}
             </motion.button>
           </form>
         </motion.div>

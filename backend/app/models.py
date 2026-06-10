@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Table, CHAR
+from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Table, CHAR, Boolean
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -143,3 +143,40 @@ class CompletedExperiment(Base):
     # Relationships
     student = relationship("User", back_populates="completions")
     experiment = relationship("Experiment", back_populates="completions")
+
+
+class StudentDoubt(Base):
+    """Captures and AI-summarizes student doubts/questions per experiment for teacher review."""
+    __tablename__ = "student_doubts"
+
+    id = Column(GUID, primary_key=True, default=generate_uuid)
+    student_id = Column(GUID, ForeignKey("users.id"), nullable=False)
+    experiment_id = Column(GUID, ForeignKey("experiments.id"), nullable=False)
+    lab_id = Column(GUID, ForeignKey("labs.id"), nullable=False)
+    original_question = Column(Text, nullable=False)   # Raw student query
+    summary = Column(Text, nullable=False)             # AI-generated concise summary
+    topic_tag = Column(String(100), nullable=True)     # e.g. "loops", "syntax error"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    student = relationship("User")
+    experiment = relationship("Experiment")
+    lab = relationship("Lab")
+
+
+class StudentMistake(Base):
+    """Captures code execution and logic mistakes for teacher review."""
+    __tablename__ = "student_mistakes"
+
+    id = Column(GUID, primary_key=True, default=generate_uuid)
+    student_id = Column(GUID, ForeignKey("users.id"), nullable=False)
+    experiment_id = Column(GUID, ForeignKey("experiments.id"), nullable=False)
+    lab_id = Column(GUID, ForeignKey("labs.id"), nullable=False)
+    error_type = Column(String(100), nullable=False)   # e.g. "Syntax Error", "Wrong Output"
+    description = Column(Text, nullable=False)         # Brief description of the failure
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    student = relationship("User")
+    experiment = relationship("Experiment")
+    lab = relationship("Lab")

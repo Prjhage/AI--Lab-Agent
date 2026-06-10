@@ -9,7 +9,8 @@ import MonacoEditor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Play, Bot, CheckCircle2, FileText,
-  Target, Star, Zap, Code, ChevronDown, Terminal
+  Target, Star, Zap, Code, ChevronDown, Terminal,
+  Brain, MessageSquare, Users, Tag, BarChart2, AlertCircle, Bug, List
 } from 'lucide-react';
 
 // Jupyter-style editor wrapper
@@ -56,7 +57,12 @@ export default function ExperimentPage() {
   const lab        = labs.find(l => l.id === labId);
   const experiment = lab?.experiments?.find(e => e.id === expId);
 
+  const isTeacher = currentUser?.role === 'teacher';
   const [activeTab, setActiveTab] = useState('description');
+
+  // Teacher Insights state
+  const [insightData, setInsightData] = useState(null);
+  const [insightLoading, setInsightLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [codes, setCodes] = useState({
     python: '# Write your solution here\ndef solution():\n    pass\n\n# Test your implementation\nresult = solution()\nprint(result)\n',
@@ -82,8 +88,13 @@ export default function ExperimentPage() {
 
   // Vertical Resizable Panel States
   const [leftWidth, setLeftWidth] = useState(320);
-  const [rightWidth, setRightWidth] = useState(300);
+  const [rightWidth, setRightWidth] = useState(480);
   const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1024);
+
+  // Monaco Editor References for highlighting
+  const [editorInstance, setEditorInstance] = useState(null);
+  const [monacoInstance, setMonacoInstance] = useState(null);
+  const [decorations, setDecorations] = useState([]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -166,6 +177,17 @@ export default function ExperimentPage() {
     if (!lab || !experiment) navigate('/dashboard');
     if (isExperimentCompleted(labId, expId)) setCompleted(true);
   }, [lab, experiment]);
+
+  // Fetch insights when teacher switches to insights tab
+  useEffect(() => {
+    if (activeTab === 'insights' && isTeacher && expId && !insightData) {
+      setInsightLoading(true);
+      api.get(`/api/ai/experiment-insights/${expId}`)
+        .then(d => setInsightData(d))
+        .catch(() => setInsightData({ error: true }))
+        .finally(() => setInsightLoading(false));
+    }
+  }, [activeTab, isTeacher, expId]);
 
   if (!lab || !experiment) return null;
 
@@ -278,12 +300,15 @@ export default function ExperimentPage() {
           {/* ═══ PANEL 1: Description / Steps ═══ */}
           <div className="flex flex-col overflow-hidden flex-shrink-0" style={{ width: isLargeScreen ? `${leftWidth}px` : '100%', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Tabs */}
-            <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-              {['description', 'steps'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)}
-                  className="flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all relative"
-                  style={{ color: activeTab === tab ? '#fff' : 'var(--text-muted)' }}>
-                  {tab === 'description' ? '📋 Description' : '🪜 Steps'}
+            <div className="flex flex-shrink-0 overflow-x-auto" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              {['description', 'steps', ...(isTeacher ? ['insights'] : [])].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center gap-1.5 px-3 py-3 text-xs font-bold uppercase tracking-wider transition-all relative whitespace-nowrap
+                    ${activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                  {tab === 'description' ? <><FileText size={14} /> Description</> : tab === 'steps' ? <><List size={14} /> Steps</> : <><Brain size={14} /> Insights</>}
                   {activeTab === tab && (
                     <motion.div
                       layoutId="expTabLine"
@@ -350,7 +375,7 @@ export default function ExperimentPage() {
                       </p>
                     </div>
                   </motion.div>
-                ) : (
+                ) : activeTab === 'steps' ? (
                   <motion.div
                     key="steps"
                     initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
@@ -382,6 +407,182 @@ export default function ExperimentPage() {
                         </p>
                       </motion.div>
                     ))}
+                  </motion.div>
+                ) : (
+                  /* ── INSIGHTS TAB (Teacher only) ── */
+                  <motion.div
+                    key="insights"
+                    initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="px-4 py-4 flex flex-col gap-3"
+                  >
+                    {/* Header banner */}
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg text-[10px] font-semibold"
+                      style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)', color: '#c4b5fd' }}>
+                      <Brain size={11} /> AI-summarized student doubts — only visible to you
+                    </div>
+
+                    {/* Loading */}
+                    {insightLoading && (
+                      <div className="flex items-center gap-2 py-6 justify-center" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
+                          <Zap size={13} className="text-violet-400" />
+                        </motion.div>
+                        Fetching student insights...
+                      </div>
+                    )}
+
+                    {/* Error */}
+                    {insightData?.error && (
+                      <div className="flex items-center gap-2 py-4" style={{ color: '#fca5a5', fontSize: '12px' }}>
+                        <AlertCircle size={13} /> Failed to load insights.
+                      </div>
+                    )}
+
+                    {insightData && !insightData.error && insightData.total_doubts === 0 && insightData.total_mistakes === 0 && (
+                      <div className="flex flex-col items-center gap-2 py-8" style={{ color: 'var(--text-muted)' }}>
+                        <MessageSquare size={22} style={{ opacity: 0.3 }} />
+                        <p style={{ fontSize: '12px' }}>No student insights yet.</p>
+                        <p style={{ fontSize: '11px' }}>Check back after students start participating!</p>
+                      </div>
+                    )}
+
+                    {insightData && !insightData.error && (insightData.total_doubts > 0 || insightData.total_mistakes > 0) && (
+                      <>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { icon: <MessageSquare size={13} />, label: 'Total Doubts', value: insightData.total_doubts, color: '#a78bfa' },
+                            { icon: <Bug size={13} />, label: 'Total Mistakes', value: insightData.total_mistakes, color: '#f87171' },
+                            { icon: <Users size={13} />, label: 'Students Asked', value: insightData.unique_students, color: '#67e8f9' },
+                          ].map(({ icon, label, value, color }) => (
+                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <div className="flex items-center gap-1.5" style={{ color }}>{icon}<span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>{label}</span></div>
+                              <span className="text-xl font-extrabold text-white">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {insightData.top_mistakes?.length > 0 && (
+                          <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#fca5a5' }}>
+                              <Bug size={10} /> Common Coding Mistakes
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              {insightData.top_mistakes.map(([mistake, count]) => {
+                                const pct = Math.round((count / insightData.total_mistakes) * 100);
+                                return (
+                                  <div key={mistake}>
+                                    <div className="flex justify-between mb-0.5">
+                                      <span style={{ fontSize: '10px', color: '#fecaca', fontWeight: 600 }}>{mistake}</span>
+                                      <span style={{ fontSize: '10px', color: '#fca5a5' }}>{count} × ({pct}%)</span>
+                                    </div>
+                                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(239,68,68,0.1)' }}>
+                                      <motion.div
+                                        className="h-full rounded-full"
+                                        style={{ background: 'linear-gradient(90deg,#ef4444,#f87171)' }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${pct}%` }}
+                                        transition={{ duration: 0.7, ease: 'easeOut' }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Topic breakdown */}
+                        {insightData.top_topics?.length > 0 && (
+                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <BarChart2 size={10} /> Confusion Hotspots
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              {insightData.top_topics.map(([topic, count]) => {
+                                const pct = Math.round((count / insightData.total_doubts) * 100);
+                                return (
+                                  <div key={topic}>
+                                    <div className="flex justify-between mb-0.5">
+                                      <span style={{ fontSize: '10px', color: '#c4b5fd', fontWeight: 600 }}>{topic}</span>
+                                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{count} × ({pct}%)</span>
+                                    </div>
+                                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                                      <motion.div
+                                        className="h-full rounded-full"
+                                        style={{ background: 'linear-gradient(90deg,#7c3aed,#06b6d4)' }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${pct}%` }}
+                                        transition={{ duration: 0.7, ease: 'easeOut' }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Doubt feed */}
+                        {insightData.doubts?.length > 0 && (
+                          <div className="flex flex-col gap-2 mt-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <MessageSquare size={10} /> Recent Student Questions
+                            </p>
+                            {insightData.doubts.map((d, i) => (
+                              <motion.div
+                                key={d.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.04 }}
+                                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderLeft: '2px solid rgba(124,58,237,0.5)', borderRadius: '0.625rem', padding: '9px 11px' }}
+                              >
+                                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                  <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 700 }}>{d.student_name}</span>
+                                  <span style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: '999px', padding: '0 6px', fontSize: '9px', color: '#67e8f9', fontWeight: 600 }}>
+                                    <Tag size={7} style={{ display: 'inline', marginRight: '2px' }} />{d.topic_tag}
+                                  </span>
+                                  <span style={{ marginLeft: 'auto', fontSize: '9px', color: 'var(--text-muted)' }}>
+                                    {new Date(d.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: '11px', color: 'var(--text-sub)', lineHeight: '1.5' }}>{d.summary}</p>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {insightData.mistakes?.length > 0 && (
+                          <div className="flex flex-col gap-2 mt-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <Bug size={10} /> Recent Code Failures
+                            </p>
+                            {insightData.mistakes.map((m, i) => (
+                              <motion.div
+                                key={m.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.04 }}
+                                style={{ background: 'rgba(239,68,68,0.02)', border: '1px solid rgba(239,68,68,0.1)', borderLeft: '2px solid rgba(239,68,68,0.5)', borderRadius: '0.625rem', padding: '9px 11px' }}
+                              >
+                                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                  <span style={{ fontSize: '10px', color: '#fca5a5', fontWeight: 700 }}>{m.student_name}</span>
+                                  <span style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '999px', padding: '0 6px', fontSize: '9px', color: '#fca5a5', fontWeight: 600 }}>
+                                    <Bug size={7} style={{ display: 'inline', marginRight: '2px' }} />{m.error_type}
+                                  </span>
+                                  <span style={{ marginLeft: 'auto', fontSize: '9px', color: 'var(--text-muted)' }}>
+                                    {new Date(m.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <pre style={{ fontSize: '10px', color: '#fecaca', background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                                  {m.description}
+                                </pre>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -433,14 +634,34 @@ export default function ExperimentPage() {
             </div>
 
             {/* Editor */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
+              <style>{`
+                .monaco-error-line {
+                  background-color: rgba(239, 68, 68, 0.2) !important;
+                }
+                .monaco-inline-fix {
+                  color: #10b981 !important;
+                  font-style: italic;
+                  opacity: 0.9;
+                  margin-left: 16px;
+                }
+              `}</style>
               {lab.editor_type === 'jupyter'
                 ? <JupyterEditor code={code} setCode={setCode} />
                 : <MonacoEditor
                     height="100%"
                     language={selectedLanguage}
                     value={code}
-                    onChange={v => setCode(v || '')}
+                    onChange={v => {
+                      setCode(v || '');
+                      if (decorations.length > 0 && editorInstance) {
+                        setDecorations(editorInstance.deltaDecorations(decorations, []));
+                      }
+                    }}
+                    onMount={(editor, monaco) => {
+                      setEditorInstance(editor);
+                      setMonacoInstance(monaco);
+                    }}
                     theme="vs-dark"
                     options={{ fontSize: 13, minimap: { enabled: false }, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 14 }, fontFamily: "'JetBrains Mono','Fira Code',monospace", fontLigatures: true }}
                   />
@@ -672,12 +893,58 @@ export default function ExperimentPage() {
                 <Bot size={13} /> Ask AI Agent
               </motion.button>
               <motion.button
-                onClick={() => chat.suggestAlternate(code)}
+                onClick={async () => {
+                  const resText = await chat.findMistake(code);
+                  console.log("AI Mistake Response:", resText);
+                  if (resText && editorInstance && monacoInstance) {
+                    const regex = /\[LINE:\s*(\d+)\]\s*\[FIX:\s*([\s\S]*?)\]/gi;
+                    let match;
+                    let newDecsList = [];
+                    const model = editorInstance.getModel();
+                    while ((match = regex.exec(resText)) !== null) {
+                      const lineNum = parseInt(match[1]);
+                      const fix = match[2].trim().replace(/\n/g, ' ');
+                      console.log(`Parsed -> Line: ${lineNum}, Fix: ${fix}`);
+                      if (lineNum > 0 && lineNum <= model.getLineCount()) {
+                        const maxCol = model.getLineMaxColumn(lineNum);
+                        
+                        // 1. Red background decoration
+                        newDecsList.push({
+                          range: new monacoInstance.Range(lineNum, 1, lineNum, 1),
+                          options: {
+                            description: 'error-line-bg',
+                            isWholeLine: true,
+                            className: 'monaco-error-line',
+                            hoverMessage: { value: `**AI Suggested Fix:**\n\`\`\`cpp\n${fix}\n\`\`\`` }
+                          }
+                        });
+
+                        // 2. Inline ghost text decoration at the end of the line
+                        newDecsList.push({
+                          range: new monacoInstance.Range(lineNum, 1, lineNum, maxCol),
+                          options: {
+                            description: 'error-line-fix-text',
+                            after: {
+                              content: `    // FIX: ${fix}`,
+                              inlineClassName: 'monaco-inline-fix'
+                            }
+                          }
+                        });
+                      }
+                    }
+                    if (newDecsList.length > 0) {
+                      const newDecs = editorInstance.deltaDecorations(decorations, newDecsList);
+                      setDecorations(newDecs);
+                    } else {
+                      console.warn("Regex found no matches in AI response.");
+                    }
+                  }
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all"
-                style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)', color: '#67e8f9' }}
-                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#fca5a5' }}
+                whileHover={{ scale: 1.04, background: 'rgba(239,68,68,0.15)' }} whileTap={{ scale: 0.96 }}
               >
-                💡 Alternate
+                <Bug size={13} /> Find Mistake
               </motion.button>
               <div className="flex-1" />
               <motion.button
@@ -694,6 +961,20 @@ export default function ExperimentPage() {
                     Running…
                   </>
                 ) : <><Play size={12} /> Run Code</>}
+              </motion.button>
+              <motion.button
+                onClick={async () => {
+                  if (!completed) {
+                    await completeExperiment(labId, expId);
+                    setCompleted(true);
+                  }
+                }}
+                disabled={completed}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold shadow-md transition-all ${completed ? 'bg-green-600/30 text-green-400 cursor-not-allowed border border-green-500/30' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+                whileHover={!completed ? { scale: 1.04 } : {}}
+                whileTap={!completed ? { scale: 0.96 } : {}}
+              >
+                {completed ? <><CheckCircle2 size={12} /> Submitted</> : 'Submit Assignment'}
               </motion.button>
             </div>
           </div>

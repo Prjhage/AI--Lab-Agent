@@ -3,7 +3,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Experiment, Step, User
+from ..models import Experiment, Step, User, StudentDoubt, Lab, EnrolledLab, StudentMistake
 from ..schemas import ChatRequest, ChatResponse
 from ..deps import get_current_user
 from ..config import settings
@@ -211,6 +211,7 @@ def chat_with_agent(
             )
             if response.status_code == 200:
                 answer = response.json()["choices"][0]["message"]["content"]
+                _capture_student_doubt(query_text, exp, current_user, db)
                 return {"text": answer, "response": answer}
             else:
                 print(f"Groq RAG-2 status error: {response.text}")
@@ -224,4 +225,297 @@ def chat_with_agent(
         payload.current_code, 
         rag_context
     )
+
+    # --- STUDENT FEEDBACK AGENT: capture doubt silently after response ---
+    _capture_student_doubt(query_text, exp, current_user, db)
+
     return {"text": offline_response, "response": offline_response}
+
+
+def _summarize_doubt_offline(question: str, exp_title: str) -> tuple[str, str]:
+    """Lightweight offline doubt summarizer. Returns (summary, topic_tag)."""
+    q = question.lower()
+    # Topic classification
+    if any(w in q for w in ["loop", "for", "while", "iterate"]):
+        tag = "loops"
+    elif any(w in q for w in ["error", "exception", "bug", "fail", "traceback"]):
+        tag = "error handling"
+    elif any(w in q for w in ["function", "def", "return", "call"]):
+        tag = "functions"
+    elif any(w in q for w in ["import", "module", "library", "package"]):
+        tag = "imports/modules"
+    elif any(w in q for w in ["list", "dict", "tuple", "array", "index"]):
+        tag = "data structures"
+    elif any(w in q for w in ["step", "how", "explain", "guide"]):
+        tag = "concept clarity"
+    elif any(w in q for w in ["verify", "check", "correct", "done"]):
+        tag = "verification"
+    else:
+        tag = "general"
+
+    # Concise summary (max 120 chars)
+    trimmed = question.strip()[:120]
+    summary = f"Student asked about {tag} in '{exp_title}': \"{trimmed}{'...' if len(question) > 120 else ''}\""
+    return summary, tag
+
+
+def _capture_student_doubt(query_text: str, exp: Experiment, student: User, db: Session):
+    """Background-style function: summarizes the student query and persists it."""
+    if student.role != "student" or not query_text or len(query_text.strip()) < 8:
+        return
+    try:
+        summary, tag = _summarize_doubt_offline(query_text, exp.title)
+
+        # If Groq key is available, use LLM for better summary
+        if settings.GROQ_API_KEY_RAG2 and "mock-key" not in settings.GROQ_API_KEY_RAG2:
+            try:
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY_RAG2}", "Content-Type": "application/json"},
+                    json={
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "system", "content": "You are a lab instructor assistant. In ONE concise sentence (max 15 words), summarize what concept the student is struggling with. Output ONLY the sentence, nothing else."},
+                            {"role": "user", "content": f"Experiment: {exp.title}\nStudent question: {query_text}"}
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 60
+                    },
+                    timeout=5
+                )
+                if resp.status_code == 200:
+                    summary = resp.json()["choices"][0]["message"]["content"].strip()
+            except Exception:
+                pass  # Fall back to offline summary
+
+        doubt = StudentDoubt(
+            student_id=student.id,
+            experiment_id=exp.id,
+            lab_id=exp.lab_id,
+            original_question=query_text[:500],
+            summary=summary,
+            topic_tag=tag,
+        )
+        db.add(doubt)
+        db.commit()
+    except Exception as e:
+        print(f"[FeedbackAgent] Failed to capture doubt: {e}")
+        db.rollback()
+
+
+@router.get("/lab-insights/{lab_id}")
+def get_lab_student_insights(
+    lab_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Teacher-only: Returns aggregated student doubt summaries per experiment for a lab."""
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can view student insights.")
+
+    lab = db.query(Lab).filter(Lab.id == lab_id, Lab.faculty_id == current_user.id).first()
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found or access denied.")
+
+    doubts = (
+        db.query(StudentDoubt)
+        .filter(StudentDoubt.lab_id == lab_id)
+        .order_by(StudentDoubt.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+    # Group by experiment_id
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for d in doubts:
+        grouped[d.experiment_id].append({
+            "id": d.id,
+            "student_id": d.student_id,
+            "student_name": d.student.username if d.student else "Unknown",
+            "summary": d.summary,
+            "topic_tag": d.topic_tag,
+            "original_question": d.original_question,
+            "created_at": d.created_at.isoformat(),
+        })
+
+    mistakes = (
+        db.query(StudentMistake)
+        .filter(StudentMistake.lab_id == lab_id)
+        .all()
+    )
+    
+    mistakes_grouped = defaultdict(list)
+    for m in mistakes:
+        mistakes_grouped[m.experiment_id].append(m)
+
+    result = []
+    for exp in lab.experiments:
+        exp_doubts = grouped.get(exp.id, [])
+        exp_mistakes = mistakes_grouped.get(exp.id, [])
+        
+        # Count topics
+        tag_counts = defaultdict(int)
+        for dd in exp_doubts:
+            tag_counts[dd["topic_tag"]] += 1
+            
+        # Count mistake types
+        mistake_counts = defaultdict(int)
+        for mm in exp_mistakes:
+            mistake_counts[mm.error_type] += 1
+            
+        # Deduplicate doubts per student to give a concise summary (max 2 distinct topics per student)
+        student_doubts = defaultdict(list)
+        for dd in exp_doubts:
+            student_doubts[dd["student_id"]].append(dd)
+            
+        deduped_doubts = []
+        for sid, d_list in student_doubts.items():
+            seen_topics = set()
+            student_deduped = []
+            d_list_sorted = sorted(d_list, key=lambda x: x["created_at"], reverse=True)
+            for d in d_list_sorted:
+                if d["topic_tag"] not in seen_topics:
+                    seen_topics.add(d["topic_tag"])
+                    student_deduped.append(d)
+                if len(student_deduped) >= 3:
+                    break
+            
+            if student_deduped:
+                base = student_deduped[0].copy()
+                if len(student_deduped) > 1:
+                    base["summary"] = " | ".join(f"[{d['topic_tag']}] {d['summary']}" for d in student_deduped)
+                    base["topic_tag"] = "multiple"
+                deduped_doubts.append(base)
+            
+        deduped_doubts.sort(key=lambda x: x["created_at"], reverse=True)
+            
+        result.append({
+            "experiment_id": exp.id,
+            "experiment_title": exp.title,
+            "total_doubts": len(exp_doubts),
+            "top_topics": sorted(tag_counts.items(), key=lambda x: -x[1])[:5],
+            "recent_doubts": deduped_doubts[:10],
+            "top_mistakes": sorted(mistake_counts.items(), key=lambda x: -x[1])[:5],
+            "total_mistakes": len(exp_mistakes)
+        })
+
+    return {"lab_id": lab_id, "lab_title": lab.title, "experiments": result}
+
+
+@router.get("/experiment-insights/{exp_id}")
+def get_experiment_student_insights(
+    exp_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Teacher-only: Returns AI-summarized student doubts for a specific experiment."""
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can view student insights.")
+
+    exp = db.query(Experiment).filter(Experiment.id == exp_id).first()
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experiment not found.")
+
+    doubts = (
+        db.query(StudentDoubt)
+        .filter(StudentDoubt.experiment_id == exp_id)
+        .order_by(StudentDoubt.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    from collections import defaultdict, Counter
+    tag_counter = Counter(d.topic_tag for d in doubts)
+    top_topics = tag_counter.most_common(6)
+
+    # Unique students who asked questions
+    unique_students = len(set(d.student_id for d in doubts))
+    
+    # Fetch Mistakes
+    mistakes = (
+        db.query(StudentMistake)
+        .filter(StudentMistake.experiment_id == exp_id)
+        .order_by(StudentMistake.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    mistake_counter = Counter(m.error_type for m in mistakes)
+    top_mistakes = mistake_counter.most_common(6)
+    
+    # Deduplicate mistakes per student (max 2 distinct errors per student)
+    student_mistakes = defaultdict(list)
+    for m in mistakes:
+        student_mistakes[m.student_id].append(m)
+        
+    deduped_mistakes = []
+    for sid, m_list in student_mistakes.items():
+        seen_errors = set()
+        student_deduped = []
+        for m in sorted(m_list, key=lambda x: x.created_at, reverse=True):
+            if m.error_type not in seen_errors:
+                seen_errors.add(m.error_type)
+                student_deduped.append({
+                    "id": m.id,
+                    "student_name": m.student.username if m.student else "Unknown",
+                    "error_type": m.error_type,
+                    "description": m.description,
+                    "created_at": m.created_at.isoformat()
+                })
+            if len(student_deduped) >= 3:
+                break
+                
+        if student_deduped:
+            base = student_deduped[0].copy()
+            if len(student_deduped) > 1:
+                base["description"] = "\n---\n".join(f"[{m['error_type']}] {m['description']}" for m in student_deduped)
+                base["error_type"] = "multiple"
+            deduped_mistakes.append(base)
+        
+    deduped_mistakes.sort(key=lambda x: x["created_at"], reverse=True)
+    mistake_list = deduped_mistakes[:15]
+
+    # Deduplicate doubts per student (max 2 distinct topics per student)
+    student_doubts = defaultdict(list)
+    for d in doubts:
+        student_doubts[d.student_id].append(d)
+        
+    deduped_doubts = []
+    for sid, d_list in student_doubts.items():
+        seen_topics = set()
+        student_deduped = []
+        for d in sorted(d_list, key=lambda x: x.created_at, reverse=True):
+            if d.topic_tag not in seen_topics:
+                seen_topics.add(d.topic_tag)
+                student_deduped.append({
+                    "id": d.id,
+                    "student_name": d.student.username if d.student else "Unknown",
+                    "summary": d.summary,
+                    "topic_tag": d.topic_tag,
+                    "original_question": d.original_question,
+                    "created_at": d.created_at.isoformat(),
+                })
+            if len(student_deduped) >= 3:
+                break
+                
+        if student_deduped:
+            base = student_deduped[0].copy()
+            if len(student_deduped) > 1:
+                base["summary"] = " | ".join(f"[{d['topic_tag']}] {d['summary']}" for d in student_deduped)
+                base["topic_tag"] = "multiple"
+            deduped_doubts.append(base)
+        
+    deduped_doubts.sort(key=lambda x: x["created_at"], reverse=True)
+    doubt_list = deduped_doubts[:15]
+
+    return {
+        "experiment_id": exp_id,
+        "experiment_title": exp.title,
+        "total_doubts": len(doubts),
+        "unique_students": unique_students,
+        "top_topics": top_topics,
+        "doubts": doubt_list,
+        "total_mistakes": len(mistakes),
+        "top_mistakes": top_mistakes,
+        "mistakes": mistake_list,
+    }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, List, FileText, Lightbulb, FlaskConical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ReactMarkdown from 'react-markdown';
@@ -80,7 +80,7 @@ export const ChatPanel = ({ chat, onSuggestAlternate, onSuggestTestCases, curren
                   : 'rgba(255,255,255,0.05)',
                 border: `1px solid ${msg.sender === 'user' ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.07)'}`,
               }}>
-                {msg.sender === 'ai' || msg.text.startsWith('🪜')
+                {msg.sender === 'ai' || msg.isStep
                   ? (
                       <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
@@ -153,8 +153,8 @@ export const ChatPanel = ({ chat, onSuggestAlternate, onSuggestTestCases, curren
         <div className="px-4 py-2 flex gap-2 flex-wrap flex-shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           {[
-            { label: '💡 Alternate Solution', action: () => onSuggestAlternate(currentCode), color: 'violet' },
-            ...(onSuggestTestCases ? [{ label: '🧪 Test Cases', action: onSuggestTestCases, color: 'cyan' }] : []),
+            { label: <><Lightbulb size={12} className="inline -mt-0.5 mr-1" /> Alternate Solution</>, action: () => onSuggestAlternate(currentCode), color: 'violet' },
+            ...(onSuggestTestCases ? [{ label: <><FlaskConical size={12} className="inline -mt-0.5 mr-1" /> Test Cases</>, action: onSuggestTestCases, color: 'cyan' }] : []),
           ].map(({ label, action, color }) => (
             <motion.button
               key={label}
@@ -191,7 +191,7 @@ export const ChatPanel = ({ chat, onSuggestAlternate, onSuggestTestCases, curren
                   color: '#67e8f9',
                 }}
               >
-                <span>{ctx.type === 'step' ? '🪜' : '📄'} {ctx.name}</span>
+                <span className="flex items-center gap-1.5">{ctx.type === 'step' ? <List size={12} /> : <FileText size={12} />} {ctx.name}</span>
                 <button
                   type="button"
                   onClick={() => chat.removeContext(idx)}

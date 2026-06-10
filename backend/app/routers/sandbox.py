@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from pydantic import BaseModel
 from ..database import get_db
-from ..models import Experiment
+from ..models import Experiment, StudentMistake
 from ..schemas import TestCaseResponse
 from ..deps import get_current_user
 from ..utils.sandbox_engine import run_sandbox
@@ -60,6 +60,22 @@ def run_code_in_sandbox(
         if not test_cases:
             # Fallback if no test cases configured: run once with empty input
             res = run_sandbox(payload.code, payload.language, "")
+            
+            if res["status"] != "Accepted" and current_user.role == "student":
+                try:
+                    mistake = StudentMistake(
+                        student_id=current_user.id,
+                        experiment_id=exp.id,
+                        lab_id=exp.lab_id,
+                        error_type=res["status"],
+                        description=res["stderr"][:500] if res["stderr"] else "Execution failed without stderr"
+                    )
+                    db.add(mistake)
+                    db.commit()
+                except Exception as e:
+                    print("Error saving mistake:", e)
+                    db.rollback()
+
             return SandboxResponse(
                 stdout=res["stdout"],
                 stderr=res["stderr"],
@@ -100,6 +116,25 @@ def run_code_in_sandbox(
         total_stdout = "\n".join([f"Case Input: '{r.input}' -> Output: '{r.actual.strip()}' [ {'PASS' if r.passed else 'FAIL'} ]" for r in tc_results])
         total_stderr = "\n".join([r.stderr for r in tc_results if r.stderr])
         
+        if not all_passed and current_user.role == "student":
+            try:
+                error_type = primary_status
+                if primary_status == "Accepted" and first_failure:
+                    error_type = "Wrong Output"
+                desc = first_failure.stderr[:500] if first_failure and first_failure.stderr else f"Failed case: {first_failure.input} -> Expected {first_failure.expected}, but got {first_failure.actual}" if first_failure else "Execution failed"
+                mistake = StudentMistake(
+                    student_id=current_user.id,
+                    experiment_id=exp.id,
+                    lab_id=exp.lab_id,
+                    error_type=error_type,
+                    description=desc[:500]
+                )
+                db.add(mistake)
+                db.commit()
+            except Exception as e:
+                print("Error saving mistake:", e)
+                db.rollback()
+        
         return SandboxResponse(
             stdout=total_stdout,
             stderr=total_stderr,
@@ -112,6 +147,9 @@ def run_code_in_sandbox(
 
     # Basic single execution run (no experiment validation)
     res = run_sandbox(payload.code, payload.language, payload.stdin)
+    
+    # We don't have experiment_id here, so we don't save a mistake.
+    
     return SandboxResponse(
         stdout=res["stdout"],
         stderr=res["stderr"],

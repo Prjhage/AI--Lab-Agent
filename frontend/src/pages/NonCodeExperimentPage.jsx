@@ -5,15 +5,19 @@ import { useChat } from '../hooks/useChat';
 import { Navbar } from '../components/navbar/Navbar';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { motion, AnimatePresence } from 'framer-motion';
+import api from '../utils/api';
 import {
   ArrowLeft, ChevronDown, ChevronUp, CheckCircle2,
-  ArrowRight, Zap, Star, FileText, Bug, Target, CheckCheck, Terminal, HelpCircle
+  ArrowRight, Zap, Star, FileText, Bug, Target, CheckCheck, Terminal, HelpCircle,
+  Brain, MessageSquare, Users, Tag, BarChart2, AlertCircle, List, PartyPopper
 } from 'lucide-react';
 
 export default function NonCodeExperimentPage() {
   const { labId, expId } = useParams();
   const navigate         = useNavigate();
-  const { labs, completeExperiment, isExperimentCompleted } = useAuth();
+  const { labs, completeExperiment, isExperimentCompleted, currentUser } = useAuth();
+
+  const isTeacher = currentUser?.role === 'teacher';
 
   const lab        = labs.find(l => l.id === labId);
   const experiment = lab?.experiments?.find(e => e.id === expId);
@@ -24,6 +28,10 @@ export default function NonCodeExperimentPage() {
   const [doneSteps, setDoneSteps]       = useState({});
   const [completed, setCompleted]       = useState(false);
   const [commandInputs, setCommandInputs] = useState({}); // { stepIndex: string }
+
+  // Teacher Insights state
+  const [insightData, setInsightData]     = useState(null);
+  const [insightLoading, setInsightLoading] = useState(false);
 
   const chat = useChat(experiment, experiment?.steps?.[currentStep]);
 
@@ -71,6 +79,17 @@ export default function NonCodeExperimentPage() {
     if (!lab || !experiment) navigate('/dashboard');
     if (isExperimentCompleted(labId, expId)) setCompleted(true);
   }, [lab, experiment]);
+
+  // Lazy-fetch insights when teacher opens the Insights tab
+  useEffect(() => {
+    if (activeTab === 'insights' && isTeacher && expId && !insightData) {
+      setInsightLoading(true);
+      api.get(`/api/ai/experiment-insights/${expId}`)
+        .then(d => setInsightData(d))
+        .catch(() => setInsightData({ error: true }))
+        .finally(() => setInsightLoading(false));
+    }
+  }, [activeTab, isTeacher, expId]);
 
   if (!lab || !experiment) return null;
 
@@ -146,12 +165,12 @@ export default function NonCodeExperimentPage() {
           {/* ═══ PANEL 1: Description / Steps ═══ */}
           <div className="flex flex-col overflow-hidden flex-1" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Tabs */}
-            <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-              {['description', 'steps'].map(tab => (
+            <div className="flex flex-shrink-0 overflow-x-auto" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              {['description', 'steps', ...(isTeacher ? ['insights'] : [])].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
-                  className="flex-1 py-3.5 text-xs font-bold uppercase tracking-wider transition-all relative"
-                  style={{ color: activeTab === tab ? '#fff' : 'var(--text-muted)' }}>
-                  {tab === 'description' ? '📋 Description' : '🪜 Steps'}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-3 text-xs font-bold uppercase tracking-wider transition-all relative whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                  {tab === 'description' ? <><FileText size={14} /> Description</> : tab === 'steps' ? <><List size={14} /> Steps</> : <><Brain size={14} /> Insights</>}
                   {activeTab === tab && (
                     <motion.div
                       layoutId="ncTabLine"
@@ -265,7 +284,7 @@ export default function NonCodeExperimentPage() {
                             className="p-3 rounded-xl text-center font-bold text-green-400 text-xs shadow-md"
                             style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
                           >
-                            🎉 All steps complete! Redirecting to lab…
+                            <PartyPopper size={16} /> All steps complete! Redirecting to lab…
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -417,6 +436,115 @@ export default function NonCodeExperimentPage() {
                         );
                       })}
                     </div>
+                  </motion.div>
+                )}
+
+                {/* ── Insights tab (Teacher-only) ── */}
+                {activeTab === 'insights' && (
+                  <motion.div
+                    key="insights"
+                    initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                    className="px-5 py-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg text-[10px] font-semibold"
+                      style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.15)', color: '#c4b5fd' }}>
+                      <Brain size={11} /> AI-summarized student doubts — only visible to you
+                    </div>
+
+                    {insightLoading && (
+                      <div className="flex items-center gap-2 py-6 justify-center" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
+                          <Zap size={13} className="text-violet-400" />
+                        </motion.div>
+                        Fetching student insights...
+                      </div>
+                    )}
+
+                    {insightData?.error && (
+                      <div className="flex items-center gap-2 py-4" style={{ color: '#fca5a5', fontSize: '12px' }}>
+                        <AlertCircle size={13} /> Failed to load insights.
+                      </div>
+                    )}
+
+                    {insightData && !insightData.error && insightData.total_doubts === 0 && (
+                      <div className="flex flex-col items-center gap-2 py-8" style={{ color: 'var(--text-muted)' }}>
+                        <MessageSquare size={22} style={{ opacity: 0.3 }} />
+                        <p style={{ fontSize: '12px' }}>No student doubts yet.</p>
+                        <p style={{ fontSize: '11px' }}>Check back after students start chatting!</p>
+                      </div>
+                    )}
+
+                    {insightData && !insightData.error && insightData.total_doubts > 0 && (
+                      <>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { icon: <MessageSquare size={13} />, label: 'Total Doubts', value: insightData.total_doubts, color: '#a78bfa' },
+                            { icon: <Users size={13} />, label: 'Students Asked', value: insightData.unique_students, color: '#67e8f9' },
+                          ].map(({ icon, label, value, color }) => (
+                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <div className="flex items-center gap-1.5" style={{ color }}>{icon}<span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>{label}</span></div>
+                              <span className="text-xl font-extrabold text-white">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {insightData.top_topics?.length > 0 && (
+                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                              <BarChart2 size={10} /> Confusion Hotspots
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              {insightData.top_topics.map(([topic, count]) => {
+                                const pct = Math.round((count / insightData.total_doubts) * 100);
+                                return (
+                                  <div key={topic}>
+                                    <div className="flex justify-between mb-0.5">
+                                      <span style={{ fontSize: '10px', color: '#c4b5fd', fontWeight: 600 }}>{topic}</span>
+                                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{count} × ({pct}%)</span>
+                                    </div>
+                                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                                      <motion.div
+                                        className="h-full rounded-full"
+                                        style={{ background: 'linear-gradient(90deg,#7c3aed,#06b6d4)' }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${pct}%` }}
+                                        transition={{ duration: 0.7, ease: 'easeOut' }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                            <MessageSquare size={10} /> Recent Student Questions
+                          </p>
+                          {insightData.doubts.map((d, i) => (
+                            <motion.div
+                              key={d.id}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.04 }}
+                              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderLeft: '2px solid rgba(124,58,237,0.5)', borderRadius: '0.625rem', padding: '9px 11px' }}
+                            >
+                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 700 }}>{d.student_name}</span>
+                                <span style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.25)', borderRadius: '999px', padding: '0 6px', fontSize: '9px', color: '#67e8f9', fontWeight: 600 }}>
+                                  <Tag size={7} style={{ display: 'inline', marginRight: '2px' }} />{d.topic_tag}
+                                </span>
+                                <span style={{ marginLeft: 'auto', fontSize: '9px', color: 'var(--text-muted)' }}>
+                                  {new Date(d.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p style={{ fontSize: '11px', color: 'var(--text-sub)', lineHeight: '1.5' }}>{d.summary}</p>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
