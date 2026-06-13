@@ -49,8 +49,8 @@ export const useChat = (experiment, activeStep = null, code = '') => {
     if (!isSilent) {
       // Optimistically update standard UI list
       setMessages(prev => [...prev, userMsg]);
+      setIsTyping(true);
     }
-    setIsTyping(true);
 
     try {
       if (!experiment?.id) {
@@ -119,7 +119,9 @@ export const useChat = (experiment, activeStep = null, code = '') => {
       }
       return null;
     } finally {
-      setIsTyping(false);
+      if (!isSilent) {
+        setIsTyping(false);
+      }
     }
   };
 

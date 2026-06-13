@@ -73,6 +73,8 @@ class Lab(Base):
     faculty = relationship("User", back_populates="created_labs")
     experiments = relationship("Experiment", back_populates="lab", cascade="all, delete-orphan")
     enrollments = relationship("EnrolledLab", back_populates="lab", cascade="all, delete-orphan")
+    doubts = relationship("StudentDoubt", back_populates="lab", cascade="all, delete-orphan")
+    mistakes = relationship("StudentMistake", back_populates="lab", cascade="all, delete-orphan")
 
 
 class EnrolledLab(Base):
@@ -104,6 +106,8 @@ class Experiment(Base):
     steps = relationship("Step", back_populates="experiment", cascade="all, delete-orphan", order_by="Step.step_order")
     test_cases = relationship("TestCase", back_populates="experiment", cascade="all, delete-orphan")
     completions = relationship("CompletedExperiment", back_populates="experiment", cascade="all, delete-orphan")
+    doubts = relationship("StudentDoubt", back_populates="experiment", cascade="all, delete-orphan")
+    mistakes = relationship("StudentMistake", back_populates="experiment", cascade="all, delete-orphan")
 
 
 class Step(Base):
@@ -160,8 +164,8 @@ class StudentDoubt(Base):
 
     # Relationships
     student = relationship("User")
-    experiment = relationship("Experiment")
-    lab = relationship("Lab")
+    experiment = relationship("Experiment", back_populates="doubts")
+    lab = relationship("Lab", back_populates="doubts")
 
 
 class StudentMistake(Base):
@@ -178,5 +182,5 @@ class StudentMistake(Base):
 
     # Relationships
     student = relationship("User")
-    experiment = relationship("Experiment")
-    lab = relationship("Lab")
+    experiment = relationship("Experiment", back_populates="mistakes")
+    lab = relationship("Lab", back_populates="mistakes")

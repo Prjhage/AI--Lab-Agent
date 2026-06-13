@@ -355,10 +355,18 @@ export default function NonCodeExperimentPage() {
                                   className="overflow-hidden"
                                 >
                                   <div className="px-4 pb-4 flex flex-col gap-3">
-                                    <p className="text-xs leading-relaxed pt-2"
+                                    <div className="text-xs leading-relaxed pt-2 flex flex-col gap-0.5"
                                       style={{ color: 'var(--text-sub)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                      {step.description}
-                                    </p>
+                                      {step.description.split('\n').map((line, li) => {
+                                        const indent = line.match(/^(\s+)/)?.[1]?.length ?? 0;
+                                        const level = Math.floor(indent / 2);
+                                        return (
+                                          <span key={li} className="block" style={{ paddingLeft: `${level * 14}px`, opacity: level === 0 ? 1 : 0.85 }}>
+                                            {line.trimStart()}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
 
                                     {/* Command Input Area — shown only for current active step */}
                                     {isCurrent && (

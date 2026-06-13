@@ -85,7 +85,7 @@ async def add_experiment(
     steps = []
     if extracted_text:
         # Generate steps from RAG extraction
-        steps = generate_steps_from_text(extracted_text)
+        steps = generate_steps_from_text(extracted_text, is_non_code=(lab.type == "non-code"))
     else:
         # Create standard placeholder steps from description if no PDF was provided
         steps = [
@@ -186,7 +186,14 @@ def delete_experiment(
             detail="Experiment not found."
         )
 
-    # Delete the experiment (cascade rules will delete steps, test cases and completions)
+    # Also delete the associated PDF file if it exists
+    if exp.file_path and os.path.exists(exp.file_path):
+        try:
+            os.remove(exp.file_path)
+        except OSError as e:
+            print(f"Error deleting file {exp.file_path}: {e}")
+
+    # Delete the experiment (cascade rules will delete steps, test cases, completions, doubts, and mistakes)
     db.delete(exp)
     db.commit()
     return {"detail": "Experiment deleted successfully."}

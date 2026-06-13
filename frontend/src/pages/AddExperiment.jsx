@@ -138,7 +138,8 @@ export default function AddExperiment() {
             </motion.div>
 
             {/* — Test Cases — */}
-            <motion.div variants={item} className="glass ring-glow p-6 flex flex-col gap-4">
+            {lab?.type === 'code' && (
+              <motion.div variants={item} className="glass ring-glow p-6 flex flex-col gap-4">
               <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
                   <Target size={14} className="text-cyan-400" /> Test Cases
@@ -167,11 +168,11 @@ export default function AddExperiment() {
                         style={{ background: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.25)' }}>
                         {i + 1}
                       </div>
-                      <input type="text" value={tc.input} onChange={e => updateTC(i, 'input', e.target.value)}
-                        placeholder="Input" className="glass-input flex-1 px-3 py-2 text-xs" />
+                      <textarea value={tc.input} onChange={e => updateTC(i, 'input', e.target.value)}
+                        placeholder="Input" rows={3} className="glass-input flex-1 px-3 py-2 text-xs font-mono resize-y" />
                       <span className="text-gray-600 font-bold text-xs flex-shrink-0">→</span>
-                      <input type="text" value={tc.expected} onChange={e => updateTC(i, 'expected', e.target.value)}
-                        placeholder="Expected Output" className="glass-input flex-1 px-3 py-2 text-xs" />
+                      <textarea value={tc.expected} onChange={e => updateTC(i, 'expected', e.target.value)}
+                        placeholder="Expected Output" rows={3} className="glass-input flex-1 px-3 py-2 text-xs font-mono resize-y" />
                       {testCases.length > 1 && (
                         <motion.button type="button" onClick={() => removeTC(i)}
                           className="p-1.5 rounded-lg flex-shrink-0 transition-all"
@@ -184,7 +185,8 @@ export default function AddExperiment() {
                   ))}
                 </AnimatePresence>
               </div>
-            </motion.div>
+              </motion.div>
+            )}
 
             {/* — File Upload — */}
             <motion.div variants={item} className="glass ring-glow p-6 flex flex-col gap-4">

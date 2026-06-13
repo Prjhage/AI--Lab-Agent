@@ -10,7 +10,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Play, Bot, CheckCircle2, FileText,
   Target, Star, Zap, Code, ChevronDown, Terminal,
-  Brain, MessageSquare, Users, Tag, BarChart2, AlertCircle, Bug, List
+  Brain, MessageSquare, Users, Tag, BarChart2, AlertCircle, Bug, List,
+  TerminalSquare, FlaskConical, AlertTriangle, PartyPopper, XCircle,
+  FileCode2, Coffee, Settings
 } from 'lucide-react';
 
 // Jupyter-style editor wrapper
@@ -21,7 +23,7 @@ function JupyterEditor({ code, setCode }) {
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg flex-shrink-0"
         style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex gap-1.5">
-          {['#ef4444','#f59e0b','#22c55e'].map(c => (
+          {['#ef4444', '#f59e0b', '#22c55e'].map(c => (
             <div key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
           ))}
         </div>
@@ -51,10 +53,10 @@ function JupyterEditor({ code, setCode }) {
 
 export default function ExperimentPage() {
   const { labId, expId } = useParams();
-  const navigate         = useNavigate();
+  const navigate = useNavigate();
   const { currentUser, labs, completeExperiment, isExperimentCompleted } = useAuth();
 
-  const lab        = labs.find(l => l.id === labId);
+  const lab = labs.find(l => l.id === labId);
   const experiment = lab?.experiments?.find(e => e.id === expId);
 
   const isTeacher = currentUser?.role === 'teacher';
@@ -73,10 +75,10 @@ export default function ExperimentPage() {
 
   const code = codes[selectedLanguage];
   const setCode = (newVal) => setCodes(prev => ({ ...prev, [selectedLanguage]: newVal }));
-  const chat       = useChat(experiment, null, code);
+  const chat = useChat(experiment, null, code);
 
-  const [output, setOutput]       = useState('');
-  const [running, setRunning]     = useState(false);
+  const [output, setOutput] = useState('');
+  const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
 
   // Bottom Interactive Tabbed Console States
@@ -212,10 +214,10 @@ export default function ExperimentPage() {
             outText += `✓ Test Case ${idx + 1}: PASSED (status: ${tc.status})\n`;
           } else {
             outText += `❌ Test Case ${idx + 1}: FAILED\n` +
-                       `   Input:    ${tc.input.trim()}\n` +
-                       `   Expected: ${tc.expected.trim()}\n` +
-                       `   Actual:   ${tc.actual.trim()}\n` +
-                       (tc.stderr ? `   Error:    ${tc.stderr.trim()}\n` : '');
+              `   Input:    ${tc.input.trim()}\n` +
+              `   Expected: ${tc.expected.trim()}\n` +
+              `   Actual:   ${tc.actual.trim()}\n` +
+              (tc.stderr ? `   Error:    ${tc.stderr.trim()}\n` : '');
           }
         });
       } else {
@@ -223,26 +225,26 @@ export default function ExperimentPage() {
       }
 
       if (res.stderr) {
-        outText += `\n⚠️ Execution Error Console:\n${res.stderr}\n`;
+        outText += `\n[!] Execution Error Console:\n${res.stderr}\n`;
       }
 
       outText += `\n[i] Compilation Status: ${res.status}\n` +
-                 `[i] Time limit threshold: ${res.time}s · Memory footprint: ${res.memory} MB\n`;
+        `[i] Time limit threshold: ${res.time}s · Memory footprint: ${res.memory} MB\n`;
 
       if (res.all_passed) {
-        outText += `\n🎉 [SUCCESS] All test cases validated successfully!\n`;
+        outText += `\n[SUCCESS] All test cases validated successfully!\n`;
         setOutput(outText);
         if (!completed) {
           await completeExperiment(labId, expId);
           setCompleted(true);
         }
       } else {
-        outText += `\n❌ [FAILURE] Code does not satisfy all validation assertions.\n`;
+        outText += `\n[FAILURE] Code does not satisfy all validation assertions.\n`;
         setOutput(outText);
       }
     } catch (err) {
       console.error("Sandbox code execution error:", err);
-      setOutput(`❌ Sandbox Error: Failed to execute code in compilation chamber.\nDetails: ${err.message || 'Connection refused'}`);
+      setOutput(`[ERROR] Sandbox Error: Failed to execute code in compilation chamber.\nDetails: ${err.message || 'Connection refused'}`);
       setIsBottomPanelOpen(true);
       setBottomActiveTab('terminal');
     } finally {
@@ -353,11 +355,11 @@ export default function ExperimentPage() {
                             >
                               <div className="flex gap-2 mb-1">
                                 <span className="text-violet-400 font-bold">IN:</span>
-                                <span className="text-white">{tc.input}</span>
+                                <span className="text-white whitespace-pre-wrap">{tc.input}</span>
                               </div>
                               <div className="flex gap-2">
                                 <span className="text-green-400 font-bold">OUT:</span>
-                                <span className="text-white">{tc.expected}</span>
+                                <span className="text-white whitespace-pre-wrap">{tc.expected}</span>
                               </div>
                             </motion.div>
                           ))}
@@ -402,9 +404,21 @@ export default function ExperimentPage() {
                           </div>
                           <p className="text-xs font-bold text-white">{step.title.replace(/^Step\s*\d+[:\s]*/i, '').replace(/^[:\s]+/, '').trim() || `Step ${i + 1}`}</p>
                         </div>
-                        <p className="px-4 pb-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-sub)' }}>
-                          {step.description}
-                        </p>
+                        <div className="px-4 pb-3 text-[11px] leading-relaxed flex flex-col gap-0.5" style={{ color: 'var(--text-sub)' }}>
+                          {step.description.split('\n').map((line, li) => {
+                            const indent = line.match(/^(\s+)/)?.[1]?.length ?? 0;
+                            const level = Math.floor(indent / 2); // 2 spaces = 1 indent level
+                            return (
+                              <span
+                                key={li}
+                                className="block"
+                                style={{ paddingLeft: `${level * 14}px`, opacity: level === 0 ? 1 : 0.85 }}
+                              >
+                                {line.trimStart()}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </motion.div>
                     ))}
                   </motion.div>
@@ -551,7 +565,7 @@ export default function ExperimentPage() {
                             ))}
                           </div>
                         )}
-                        
+
                         {insightData.mistakes?.length > 0 && (
                           <div className="flex flex-col gap-2 mt-3">
                             <p className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
@@ -609,7 +623,7 @@ export default function ExperimentPage() {
                 <span className="text-xs font-bold text-white">
                   {lab.editor_type === 'jupyter' ? 'Jupyter Notebook' : 'Monaco Editor'}
                 </span>
-                
+
                 {lab.editor_type === 'monaco' || !lab.editor_type ? (
                   <select
                     value={selectedLanguage}
@@ -617,17 +631,17 @@ export default function ExperimentPage() {
                     className="ml-2 bg-white/5 border border-white/10 hover:border-white/20 transition-all rounded-lg px-2.5 py-1 text-[11px] font-bold text-violet-300 focus:outline-none cursor-pointer"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                   >
-                    <option value="python" style={{ background: '#0e111d', color: '#fff' }}>🐍 Python 3</option>
-                    <option value="javascript" style={{ background: '#0e111d', color: '#fff' }}>⚡ JavaScript (Node)</option>
-                    <option value="cpp" style={{ background: '#0e111d', color: '#fff' }}>⚙️ C++ (GCC)</option>
-                    <option value="java" style={{ background: '#0e111d', color: '#fff' }}>☕ Java (OpenJDK)</option>
+                    <option value="python" style={{ background: '#0e111d', color: '#fff' }}>Python 3</option>
+                    <option value="javascript" style={{ background: '#0e111d', color: '#fff' }}>JavaScript (Node)</option>
+                    <option value="cpp" style={{ background: '#0e111d', color: '#fff' }}>C++ (GCC)</option>
+                    <option value="java" style={{ background: '#0e111d', color: '#fff' }}>Java (OpenJDK)</option>
                   </select>
                 ) : (
                   <span className="badge-violet">Python 3</span>
                 )}
               </div>
               <div className="flex gap-1">
-                {['#ef4444','#f59e0b','#22c55e'].map(c => (
+                {['#ef4444', '#f59e0b', '#22c55e'].map(c => (
                   <div key={c} className="w-2 h-2 rounded-full" style={{ background: c, opacity: 0.7 }} />
                 ))}
               </div>
@@ -649,22 +663,30 @@ export default function ExperimentPage() {
               {lab.editor_type === 'jupyter'
                 ? <JupyterEditor code={code} setCode={setCode} />
                 : <MonacoEditor
-                    height="100%"
-                    language={selectedLanguage}
-                    value={code}
-                    onChange={v => {
-                      setCode(v || '');
-                      if (decorations.length > 0 && editorInstance) {
-                        setDecorations(editorInstance.deltaDecorations(decorations, []));
-                      }
-                    }}
-                    onMount={(editor, monaco) => {
-                      setEditorInstance(editor);
-                      setMonacoInstance(monaco);
-                    }}
-                    theme="vs-dark"
-                    options={{ fontSize: 13, minimap: { enabled: false }, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 14 }, fontFamily: "'JetBrains Mono','Fira Code',monospace", fontLigatures: true }}
-                  />
+                  height="100%"
+                  language={selectedLanguage}
+                  value={code}
+                  onChange={v => {
+                    setCode(v || '');
+                    if (decorations.length > 0 && editorInstance) {
+                      setDecorations(editorInstance.deltaDecorations(decorations, []));
+                    }
+                  }}
+                  onMount={(editor, monaco) => {
+                    setEditorInstance(editor);
+                    setMonacoInstance(monaco);
+                    editor.onMouseDown(() => {
+                      setDecorations(prev => {
+                        if (prev.length > 0) {
+                          return editor.deltaDecorations(prev, []);
+                        }
+                        return prev;
+                      });
+                    });
+                  }}
+                  theme="vs-dark"
+                  options={{ fontSize: 13, minimap: { enabled: false }, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', padding: { top: 14 }, fontFamily: "'JetBrains Mono','Fira Code',monospace", fontLigatures: true }}
+                />
               }
             </div>
 
@@ -694,31 +716,29 @@ export default function ExperimentPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setIsBottomPanelOpen(true); setBottomActiveTab('testcases'); }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                      bottomActiveTab === 'testcases' && isBottomPanelOpen
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${bottomActiveTab === 'testcases' && isBottomPanelOpen
                         ? 'text-white'
                         : 'text-gray-400 hover:text-gray-200'
-                    }`}
+                      }`}
                     style={{
                       background: bottomActiveTab === 'testcases' && isBottomPanelOpen ? 'rgba(255,255,255,0.06)' : 'transparent',
                       border: bottomActiveTab === 'testcases' && isBottomPanelOpen ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent'
                     }}
                   >
-                    🧪 Test Cases
+                    <FlaskConical size={12} className="inline mr-1" /> Test Cases
                   </button>
                   <button
                     onClick={() => { setIsBottomPanelOpen(true); setBottomActiveTab('terminal'); }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                      bottomActiveTab === 'terminal' && isBottomPanelOpen
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${bottomActiveTab === 'terminal' && isBottomPanelOpen
                         ? 'text-white'
                         : 'text-gray-400 hover:text-gray-200'
-                    }`}
+                      }`}
                     style={{
                       background: bottomActiveTab === 'terminal' && isBottomPanelOpen ? 'rgba(255,255,255,0.06)' : 'transparent',
                       border: bottomActiveTab === 'terminal' && isBottomPanelOpen ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent'
                     }}
                   >
-                    🖥 Terminal Output
+                    <Terminal size={12} className="inline mr-1" /> Terminal Output
                   </button>
                 </div>
 
@@ -750,20 +770,18 @@ export default function ExperimentPage() {
                                 <button
                                   key={idx}
                                   onClick={() => setActiveTestCaseIdx(idx)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                    isSelected
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${isSelected
                                       ? 'text-white bg-white/10 border border-white/15'
                                       : 'text-gray-400 hover:text-gray-200 bg-white/3 border border-transparent'
-                                  }`}
+                                    }`}
                                 >
                                   <div
-                                    className={`w-1.5 h-1.5 rounded-full ${
-                                      hasRun
+                                    className={`w-1.5 h-1.5 rounded-full ${hasRun
                                         ? passed
                                           ? 'bg-green-400 shadow-[0_0_6px_#22c55e]'
                                           : 'bg-red-400 shadow-[0_0_6px_#ef4444]'
                                         : 'bg-gray-500'
-                                    }`}
+                                      }`}
                                   />
                                   Case {idx + 1}
                                 </button>
@@ -791,7 +809,11 @@ export default function ExperimentPage() {
                                     }}
                                   >
                                     <span className="flex items-center gap-1.5">
-                                      {passed ? '✓ All assertions passed for this case.' : '❌ Wrong Answer: output does not match expected value.'}
+                                      {passed ? (
+                                        <><CheckCircle2 size={13} className="text-green-400 inline" /> All assertions passed for this case.</>
+                                      ) : (
+                                        <><XCircle size={13} className="text-red-400 inline" /> Wrong Answer: output does not match expected value.</>
+                                      )}
                                     </span>
                                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-white/5">
                                       {result.status}
@@ -879,9 +901,8 @@ export default function ExperimentPage() {
                   let customPrompt = "Analyze my current code implementation. Detect any bugs, formatting issues, or optimizations.";
                   if (lastRunResults) {
                     const allPassed = lastRunResults.test_case_results?.every(r => r.passed);
-                    customPrompt += `\n\n[Sandbox Unit Test execution status: ${
-                      allPassed ? "SUCCESS - All unit test cases passed!" : "FAILURE - Some test cases failed."
-                    }]\nStdout: ${lastRunResults.stdout || 'None'}\nStderr: ${lastRunResults.stderr || 'None'}`;
+                    customPrompt += `\n\n[Sandbox Unit Test execution status: ${allPassed ? "SUCCESS - All unit test cases passed!" : "FAILURE - Some test cases failed."
+                      }]\nStdout: ${lastRunResults.stdout || 'None'}\nStderr: ${lastRunResults.stderr || 'None'}`;
                   }
                   chat.askAgent(code, customPrompt);
                 }}
@@ -907,7 +928,7 @@ export default function ExperimentPage() {
                       console.log(`Parsed -> Line: ${lineNum}, Fix: ${fix}`);
                       if (lineNum > 0 && lineNum <= model.getLineCount()) {
                         const maxCol = model.getLineMaxColumn(lineNum);
-                        
+
                         // 1. Red background decoration
                         newDecsList.push({
                           range: new monacoInstance.Range(lineNum, 1, lineNum, 1),
