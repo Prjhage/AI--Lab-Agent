@@ -203,7 +203,3 @@ Follow these simple, robust instructions to launch VirtuaLab locally in under 5 
 
 ---
 
-### 🎯 Fast Demo Accounts
-To test the platform immediately, click on the **Quick Demo Access** pills on the Login screen:
-*   **🎓 Student View**: `student@virtualab.ai` / `password`
-*   **🔬 Teacher View**: `teacher@virtualab.ai` / `password`
