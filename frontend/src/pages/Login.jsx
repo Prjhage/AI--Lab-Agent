@@ -35,10 +35,7 @@ export default function Login() {
     else setError(res.message);
   };
 
-  const autofill = (role) => {
-    setEmail(role === 'teacher' ? 'teacher@virtualab.ai' : 'student@virtualab.ai');
-    setPassword('password');
-  };
+
 
   return (
     <div className="page-container min-h-screen flex items-center justify-center p-4 overflow-hidden">
@@ -202,29 +199,7 @@ export default function Login() {
             </motion.button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-center text-xs font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-              <Sparkles className="inline mr-1" size={11} /> Quick Demo Access
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: '🎓 Student', role: 'student' },
-                { label: '🔬 Teacher', role: 'teacher' },
-              ].map(({ label, role }) => (
-                <motion.button
-                  key={role}
-                  type="button"
-                  onClick={() => autofill(role)}
-                  className="btn-ghost py-2.5 px-3 rounded-xl text-xs font-semibold"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  {label} Mode
-                </motion.button>
-              ))}
-            </div>
-          </div>
+
         </motion.div>
 
         {/* Footer */}
