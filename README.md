@@ -39,6 +39,8 @@ Practical computer science learning currently suffers from three fundamental bot
 *   **🤖 Groq-Powered AI Copilot Agent**: An intelligent virtual lab assistant always active on the right panel. It acts as an elite pair-programmer, evaluating student code, answering algorithmic questions, and suggesting optimized design alternatives.
 *   **📚 Retrieval-Augmented Generation (RAG)**: The AI Copilot is fully contextualized. It automatically indexes, splits, and retrieves high-fidelity background facts from PDF manuals or textbooks uploaded for each laboratory module.
 *   **🪜 Interactive Step Progression**: For non-code experiments (like Docker deployments, CLI setups, or security tasks), labs are structured as a ladder of steps. Students execute commands, click **Debug Step** to stage context, and submit their output. The AI evaluates their execution and cryptographically unlocks the next step button!
+*   **🧑‍🏫 Socratic AI Tutor**: The AI follows strict pedagogical rules—guiding students with targeted hints, explaining concepts, and pointing out specific mistakes without ever revealing the full solution code unless explicitly requested.
+*   **📊 Real-Time Teacher Insights**: Teachers have access to a dedicated analytics dashboard for each experiment, tracking exact student queries (doubts) and specific code compilation/execution mistakes to identify class-wide struggling points.
 
 ---
 
