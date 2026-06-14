@@ -10,6 +10,7 @@ import LabPage from '../pages/LabPage';
 import AddExperiment from '../pages/AddExperiment';
 import ExperimentPage from '../pages/ExperimentPage';
 import NonCodeExperimentPage from '../pages/NonCodeExperimentPage';
+import ExperimentInsightsPage from '../pages/ExperimentInsightsPage';
 
 /* Dynamically route to code vs non-code experiment page */
 function ExperimentRouter() {
@@ -64,6 +65,7 @@ export default function AppRoutes() {
       <Route path="/create-lab" element={<ProtectedRoute><CreateLab /></ProtectedRoute>} />
       <Route path="/lab/:labId" element={<ProtectedRoute><LabPage /></ProtectedRoute>} />
       <Route path="/lab/:labId/add-experiment" element={<ProtectedRoute><AddExperiment /></ProtectedRoute>} />
+      <Route path="/lab/:labId/:expId/insights" element={<ProtectedRoute><ExperimentInsightsPage /></ProtectedRoute>} />
       <Route path="/lab/:labId/:expId" element={<ProtectedRoute><ExperimentRouter /></ProtectedRoute>} />
 
       {/* Default redirect */}

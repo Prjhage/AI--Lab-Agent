@@ -1,6 +1,7 @@
 import os
 import requests
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Experiment, Step, User, StudentDoubt, Lab, EnrolledLab, StudentMistake
@@ -184,7 +185,13 @@ def chat_with_agent(
                 "2. For NON-CODE experiments: When the student submits a command for verification (they will say something like 'verify' or 'check' or paste a command), compare their input to the Expected Command provided in your context. "
                 "If their command matches or is functionally equivalent, congratulate them and append the exact token '[STEP_UNLOCKED]' at the very end of your response. "
                 "If it does NOT match, give a specific contextual HINT (not the full answer) to guide them — do NOT reveal the expected command directly. "
-                "3. If no Expected Command is in context (step has no command), unlock the step when the student indicates they have completed the step instructions."
+                "3. If no Expected Command is in context (step has no command), unlock the step when the student indicates they have completed the step instructions.\n"
+                "4. NEVER give the student the complete solution code or the full terminal command unless the student's message EXPLICITLY and DIRECTLY contains a phrase like 'give me the full code', 'show me the complete code', 'give me the answer', or 'give me the full command'. "
+                "This rule applies even if the student has bugs, errors, or wrong output — in those cases, guide them with targeted hints, explain the concept behind the mistake, point to the specific line or logic that is wrong, and let them fix it themselves. "
+                "Your role is that of a Socratic tutor — ask guiding questions, give partial examples, explain theory, but do NOT hand over the solution. "
+                "If the student is frustrated or stuck after multiple attempts, you may reveal one more small hint or a partial snippet (not the full solution) to keep them moving forward.\n"
+                "5. For CODE experiments: When pointing out an error, do NOT rewrite the entire function. Only show the corrected fragment (1-3 lines max) with a clear explanation of WHY it was wrong.\n"
+                "6. For NON-CODE experiments: When hinting at a command, describe what the command should do and its structure (e.g., 'Use the git command that initializes a new repository in the current directory'), but do NOT type out the exact command unless the student has EXPLICITLY asked for it."
             )
 
             messages = [{"role": "system", "content": system_prompt}]
@@ -259,12 +266,42 @@ def _summarize_doubt_offline(question: str, exp_title: str) -> tuple[str, str]:
     return summary, tag
 
 
+def _clean_summary_for_storage(text: str) -> str:
+    import re
+    if not text:
+        return text
+    # Remove entire Find Mistake prompt blocks (large code dump with line numbers)
+    text = re.sub(r'Here is my code with line numbers:[\s\S]*?ONLY return the tags\.?', '', text)
+    # Remove [LINE: X] tags
+    text = re.sub(r'\[LINE:\s*\d+\]', '', text)
+    # Remove [FIX: ...] tags — with OR without closing bracket (handles truncated strings)
+    text = re.sub(r'\[FIX:\s*[^\]]*\]', '', text)   # normal: has closing ]
+    text = re.sub(r'\[FIX:\s*[^\]]*$', '', text)    # truncated: no closing ] at end of string
+    # Remove [STEP_UNLOCKED]
+    text = re.sub(r'\[STEP_UNLOCKED\]', '', text)
+    # Remove any other [tag] style markers (lowercase tags)
+    text = re.sub(r'\[[a-z_]+\]', '', text)
+    # Remove orphaned lone ] or [ brackets
+    text = re.sub(r'\s*\]\s*', ' ', text)
+    text = re.sub(r'\s*\[\s*', ' ', text)
+    # Replace pipe separators with space
+    text = re.sub(r'\s*\|\s*', ' ', text)
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 def _capture_student_doubt(query_text: str, exp: Experiment, student: User, db: Session):
     """Background-style function: summarizes the student query and persists it."""
     if student.role != "student" or not query_text or len(query_text.strip()) < 8:
         return
     try:
-        summary, tag = _summarize_doubt_offline(query_text, exp.title)
+        # Always clean the raw query FIRST — strips [LINE: X], [FIX: ...], [STEP_UNLOCKED] etc.
+        clean_query = _clean_summary_for_storage(query_text)
+        if not clean_query or len(clean_query) < 5:
+            return  # Nothing meaningful left after cleaning (e.g. it was a pure Find Mistake call)
+
+        summary, tag = _summarize_doubt_offline(clean_query, exp.title)
 
         # If Groq key is available, use LLM for better summary
         if settings.GROQ_API_KEY_RAG2 and "mock-key" not in settings.GROQ_API_KEY_RAG2:
@@ -276,7 +313,7 @@ def _capture_student_doubt(query_text: str, exp: Experiment, student: User, db: 
                         "model": "llama-3.3-70b-versatile",
                         "messages": [
                             {"role": "system", "content": "You are a lab instructor assistant. In ONE concise sentence (max 15 words), summarize what concept the student is struggling with. Output ONLY the sentence, nothing else."},
-                            {"role": "user", "content": f"Experiment: {exp.title}\nStudent question: {query_text}"}
+                            {"role": "user", "content": f"Experiment: {exp.title}\nStudent question: {clean_query}"}
                         ],
                         "temperature": 0.2,
                         "max_tokens": 60
@@ -292,7 +329,7 @@ def _capture_student_doubt(query_text: str, exp: Experiment, student: User, db: 
             student_id=student.id,
             experiment_id=exp.id,
             lab_id=exp.lab_id,
-            original_question=query_text[:500],
+            original_question=clean_query[:500],
             summary=summary,
             topic_tag=tag,
         )
@@ -303,7 +340,74 @@ def _capture_student_doubt(query_text: str, exp: Experiment, student: User, db: 
         db.rollback()
 
 
+@router.get("/admin-clean-doubts")
+def admin_clean_doubts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Teacher-only: one-shot endpoint to retroactively clean all dirty AI markers from stored doubts."""
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Teachers only.")
+    doubts = db.query(StudentDoubt).all()
+    cleaned = 0
+    try:
+        for d in doubts:
+            new_s = _clean_summary_for_storage(d.summary or "")
+            new_q = _clean_summary_for_storage(d.original_question or "")
+            if new_s != (d.summary or "") or new_q != (d.original_question or ""):
+                d.summary = new_s
+                d.original_question = new_q
+                cleaned += 1
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"cleaned": cleaned, "total": len(doubts)}
+
+
+class ReportMistakeRequest(BaseModel):
+    mistakes: list  # list of {line: int, fix: str}
+
+@router.post("/report-mistake/{exp_id}")
+def report_ai_mistake(
+    exp_id: str,
+    payload: ReportMistakeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Called by the frontend when 'Find Mistake' AI detects real mistakes. Saves them as StudentMistake records."""
+    if current_user.role != "student":
+        return {"saved": 0}
+
+    exp = db.query(Experiment).filter(Experiment.id == exp_id).first()
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experiment not found.")
+
+    saved = 0
+    try:
+        for m in payload.mistakes:
+            line_no = m.get("line", 0)
+            fix_text = m.get("fix", "")
+            if line_no > 0 and fix_text and fix_text.lower() != "none":
+                mistake = StudentMistake(
+                    student_id=current_user.id,
+                    experiment_id=exp.id,
+                    lab_id=exp.lab_id,
+                    error_type="AI Detected",
+                    description=f"Line {line_no}: {fix_text[:480]}"
+                )
+                db.add(mistake)
+                saved += 1
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[ReportMistake] Failed: {e}")
+
+    return {"saved": saved}
+
+
 @router.get("/lab-insights/{lab_id}")
+
 def get_lab_student_insights(
     lab_id: str,
     db: Session = Depends(get_db),
@@ -384,7 +488,7 @@ def get_lab_student_insights(
             if student_deduped:
                 base = student_deduped[0].copy()
                 if len(student_deduped) > 1:
-                    base["summary"] = " | ".join(f"[{d['topic_tag']}] {d['summary']}" for d in student_deduped)
+                    base["summary"] = " | ".join(d['summary'] for d in student_deduped)
                     base["topic_tag"] = "multiple"
                 deduped_doubts.append(base)
             
@@ -501,7 +605,7 @@ def get_experiment_student_insights(
         if student_deduped:
             base = student_deduped[0].copy()
             if len(student_deduped) > 1:
-                base["summary"] = " | ".join(f"[{d['topic_tag']}] {d['summary']}" for d in student_deduped)
+                base["summary"] = " | ".join(d['summary'] for d in student_deduped)
                 base["topic_tag"] = "multiple"
             deduped_doubts.append(base)
         

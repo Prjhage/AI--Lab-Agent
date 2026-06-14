@@ -151,6 +151,10 @@ export default function AddExperiment() {
                   <Plus size={12} /> Add Test Case
                 </motion.button>
               </div>
+              <div className="text-xs rounded-lg px-3 py-2.5 flex items-start gap-2" style={{ background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.18)', color: '#67e8f9' }}>
+                <span className="font-bold flex-shrink-0 mt-0.5">💡 Format tip:</span>
+                <span style={{ color: 'var(--text-sub)' }}>Enter raw <span className="font-mono text-cyan-300">stdin</span> values exactly as your code reads them via <span className="font-mono text-cyan-300">cin / input()</span>. Each value on a new line or space-separated.<br />Example for n=3, capacity=50: <span className="font-mono text-cyan-300">3 50↵10 20 30↵60 100 120</span></span>
+              </div>
 
               <div className="flex flex-col gap-2.5">
                 <AnimatePresence>

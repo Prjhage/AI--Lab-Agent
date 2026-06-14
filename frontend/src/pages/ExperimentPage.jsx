@@ -956,6 +956,22 @@ export default function ExperimentPage() {
                     if (newDecsList.length > 0) {
                       const newDecs = editorInstance.deltaDecorations(decorations, newDecsList);
                       setDecorations(newDecs);
+
+                      // Report AI-detected mistakes to backend for teacher insights
+                      const mistakeRegex = /\[LINE:\s*(\d+)\]\s*\[FIX:\s*([\s\S]*?)\]/gi;
+                      const foundMistakes = [];
+                      let m2;
+                      while ((m2 = mistakeRegex.exec(resText)) !== null) {
+                        const ln = parseInt(m2[1]);
+                        const fx = m2[2].trim();
+                        if (ln > 0 && fx && fx.toLowerCase() !== 'none') {
+                          foundMistakes.push({ line: ln, fix: fx });
+                        }
+                      }
+                      if (foundMistakes.length > 0) {
+                        api.post(`/api/ai/report-mistake/${expId}`, { mistakes: foundMistakes })
+                          .catch(err => console.warn('Failed to report mistake:', err));
+                      }
                     } else {
                       console.warn("Regex found no matches in AI response.");
                     }
